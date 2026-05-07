@@ -1353,7 +1353,7 @@ app.get('/api/esp/authorized-codes/:mac', async (req, res) => {
 // SPA FALLBACK — Sirve index.html para rutas del frontend
 // ============================================================
 if (isProduction) {
-    app.get('*', (req, res) => {
+    app.get('/{*splat}', (req, res) => {
         res.sendFile(path.join(frontendDist, 'index.html'));
     });
 }
