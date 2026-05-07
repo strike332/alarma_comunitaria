@@ -234,7 +234,7 @@ const frontendUrl = process.env.FRONTEND_URL || (isProduction ? null : 'http://1
 
 const app = express();
 
-// Helmet con CSP relajada para permitir WebSocket e imágenes de cámaras
+// Helmet con CSP adaptada para HTTP (sin SSL)
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
@@ -247,6 +247,7 @@ app.use(helmet({
         },
     },
     crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginOpenerPolicy: false,
 }));
 
 // CORS
