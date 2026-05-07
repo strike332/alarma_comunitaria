@@ -35,9 +35,9 @@ WORKDIR /app
 COPY frontend/ ./frontend/
 RUN cd frontend && npm ci && cd .. && cd frontend && npx vite build && cd ..
 
-# Instalar dependencias del backend
+# Instalar dependencias del backend (compilar sqlite3 desde fuente)
 COPY backend/ ./backend/
-RUN cd backend && npm ci --omit=dev && cd ..
+RUN cd backend && npm ci --build-from-source && cd ..
 
 # Crear directorios para volúmenes persistentes
 RUN mkdir -p /data
