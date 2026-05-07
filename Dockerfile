@@ -5,8 +5,10 @@
 
 FROM node:20-slim
 
-# Instalar Chromium para whatsapp-web.js + ffmpeg para RTSP
+# Instalar herramientas de compilación para módulos nativos (sqlite3)
 RUN apt-get update && apt-get install -y \
+    python3 \
+    build-essential \
     chromium \
     ffmpeg \
     libnss3 \
