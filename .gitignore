@@ -1,0 +1,38 @@
+node_modules/
+.env
+alarmas.db
+*.db
+firebase-service-account.json
+
+# WhatsApp session (contiene sesión autenticada)
+.wwebjs_auth/
+
+# Frontend build
+frontend/dist/
+frontend/android/
+
+# Docker
+docker-compose.override.yml
+
+# IDE
+.vscode/
+*.code-workspace
+
+# Auto-generated agent rules (personalized per developer)
+AGENT.md
+CLAUDE.md
+.agent-mem/
+.agent/
+.brainsync/agent-rules.md
+.brainsync/.context-key
+.brainsync/shared-context.json
+.brainsync/ip_rules.md
+.brainsync/rules/
+.cursorrules
+.clineRules
+.windsurfrules
+.gemini/
+.cline/
+.agents/
+.mcp.json
+.mcp.json.bak

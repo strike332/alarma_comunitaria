@@ -1,0 +1,248 @@
+:root {
+  --danger: #ef4444;
+  --medical: #3b82f6;
+  --safety: #a855f7;
+  --bg: #0f172a;
+  --card: #1e293b;
+  --text: #f8fafc;
+}
+
+body.light {
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --text: #0f172a;
+  --danger: #dc2626;
+  --medical: #2563eb;
+  --safety: #9333ea;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.container {
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+  min-height: 100vh;
+}
+
+h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  text-align: center;
+  background: linear-gradient(to right, #818cf8, #c084fc);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 0.5rem;
+}
+
+.status-bar {
+  background: var(--card);
+  padding: 0.75rem 1.5rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid #334155;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 10px #22c55e;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  width: 100%;
+  flex: 1; /* Takes available space */
+}
+
+.alarm-button {
+  aspect-ratio: 1/1;
+  border: none;
+  border-radius: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.alarm-button:active {
+  transform: scale(0.95);
+  box-shadow: 0 5px 10px -3px rgba(0, 0, 0, 0.5);
+}
+
+.alarm-button.robo { background: var(--danger); }
+.alarm-button.medica { background: var(--medical); }
+.alarm-button.asistencia { background: var(--safety); }
+.alarm-button.incendio { background: #ea580c; } /* Naranja fuego */
+
+.button-icon {
+  font-size: 2.5rem;
+}
+
+.button-label {
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.footer {
+  margin-top: auto;
+  text-align: center;
+  opacity: 0.5;
+  font-size: 0.75rem;
+}
+
+/* Modal de alerta activa */
+.alert-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.9);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  animation: flash 1s infinite alternate;
+  padding: 2rem;
+  text-align: center;
+}
+
+@keyframes flash {
+  from { background: rgba(0,0,0,0.9); }
+  to { background: rgba(127, 29, 29, 0.9); }
+}
+
+.alert-message {
+  font-size: 2.5rem;
+  font-weight: 900;
+  color: white;
+  margin-bottom: 2rem;
+}
+
+.close-button {
+  padding: 1rem 2rem;
+  background: white;
+  color: black;
+  border: none;
+  border-radius: 1rem;
+  font-weight: 700;
+  font-size: 1.25rem;
+}
+
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.icon-button {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.icon-button:active {
+  background: var(--card);
+}
+
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  padding-bottom: 1rem;
+}
+
+.settings-header h2 {
+  font-size: 1.5rem;
+  margin: 0;
+  background: linear-gradient(to right, #818cf8, #c084fc);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.settings-main {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.setting-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--card);
+  padding: 1.25rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.setting-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.setting-title {
+  font-weight: 600;
+  font-size: 1.125rem;
+}
+
+.setting-desc {
+  font-size: 0.875rem;
+  opacity: 0.7;
+}
+
+.theme-toggle-btn {
+  background: rgba(148, 163, 184, 0.2);
+  border: none;
+  color: var(--text);
+  padding: 0.75rem;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.theme-toggle-btn:active {
+  background: rgba(148, 163, 184, 0.4);
+}
+

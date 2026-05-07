@@ -1,0 +1,37 @@
+# ============================================================
+# DOCKER COMPOSE — Alarma Comunitaria
+# Para desplegar en un Droplet de DigitalOcean
+# ============================================================
+
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DB_PATH=/data/alarmas.db
+      - JWT_SECRET=${JWT_SECRET}
+      - MP_ACCESS_TOKEN=${MP_ACCESS_TOKEN}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - PUBLIC_URL=${PUBLIC_URL}
+      - FIREBASE_SERVICE_ACCOUNT=${FIREBASE_SERVICE_ACCOUNT}
+    volumes:
+      - alarmas_data:/app/backend/.wwebjs_auth
+      - alarmas_db:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  alarmas_data:
+  alarmas_db:

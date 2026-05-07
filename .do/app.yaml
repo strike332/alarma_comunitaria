@@ -1,0 +1,39 @@
+# DO App Platform — Alarma Comunitaria
+
+# Para desplegar en DigitalOcean App Platform:
+# 1. Conecta tu repositorio de GitHub/GitLab
+# 2. Crea un App con tipo "Dockerfile"
+# 3. Configura las variables de entorno abajo
+# 4. Agrega los volúmenes persistentes:
+#    - /app/backend/.wwebjs_auth (para sesión de WhatsApp)
+#    - /data (para base de datos SQLite)
+
+# También puedes usar el Dockerfile sin este archivo.
+# DO App Platform lo detecta automáticamente.
+
+name: alarmas
+region: nyc1  # Cambia a tu región
+services:
+  - name: backend
+    dockerfile_path: Dockerfile
+    source_dir: /
+    http_port: 3001
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 30
+      period_seconds: 30
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        type: SECRET
+      - key: MP_ACCESS_TOKEN
+        type: SECRET
+      - key: FRONTEND_URL
+        scope: RUN_AND_BUILD_TIME
+      - key: PUBLIC_URL
+        scope: RUN_AND_BUILD_TIME
+      - key: FIREBASE_SERVICE_ACCOUNT
+        type: SECRET
+    instance_count: 1
+    instance_size_slug: basic-xxs
