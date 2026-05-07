@@ -32,19 +32,12 @@ ENV NODE_ENV=production
 WORKDIR /app
 
 # Instalar dependencias del frontend y hacer build
-COPY frontend/package.json frontend/package-lock.json* ./frontend/
-RUN cd frontend && npm ci && cd ..
-
-# Copiar y buildear frontend
 COPY frontend/ ./frontend/
-RUN cd frontend && npx vite build
+RUN cd frontend && npm ci && cd .. && cd frontend && npx vite build && cd ..
 
-# Instalar dependencias del backend (solo producción)
-COPY backend/package.json backend/package-lock.json* ./backend/
-RUN cd backend && npm ci --omit=dev && cd ..
-
-# Copiar backend
+# Instalar dependencias del backend y copiar código
 COPY backend/ ./backend/
+RUN cd backend && npm ci --omit=dev && cd ..
 
 # Crear directorios para volúmenes persistentes
 RUN mkdir -p /data

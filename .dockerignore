@@ -1,0 +1,10 @@
+# No copiar node_modules locales al contenedor (se instalan con npm ci)
+**/node_modules
+**/.wwebjs_auth
+**/alarmas.db
+**/.env
+**/dist
+**/.git
+**/crash.log
+**/test_*.jpg
+**/test_*.js
