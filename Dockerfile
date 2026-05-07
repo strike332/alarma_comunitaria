@@ -3,12 +3,10 @@
 # DigitalOcean App Platform / Droplet
 # ============================================================
 
-FROM node:20-slim
+FROM node:20
 
-# Instalar herramientas de compilación para módulos nativos (sqlite3)
+# Instalar Chromium para whatsapp-web.js + ffmpeg para RTSP
 RUN apt-get update && apt-get install -y \
-    python3 \
-    build-essential \
     chromium \
     ffmpeg \
     libnss3 \
@@ -37,7 +35,7 @@ WORKDIR /app
 COPY frontend/ ./frontend/
 RUN cd frontend && npm ci && cd .. && cd frontend && npx vite build && cd ..
 
-# Instalar dependencias del backend y copiar código
+# Instalar dependencias del backend
 COPY backend/ ./backend/
 RUN cd backend && npm ci --omit=dev && cd ..
 
