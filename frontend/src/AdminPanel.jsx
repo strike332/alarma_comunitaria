@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { io } from 'socket.io-client';
 import { API_BASE } from './config';
-import { QrCode, LogOut, CheckCircle2, Camera, Trash2, Ticket, Plus, Clock, Activity, Users, Radio, MapPin, Search, Edit2, ShieldAlert, Menu, X } from 'lucide-react';
+import { QrCode, LogOut, CheckCircle2, Camera, Trash2, Ticket, CreditCard, Plus, Clock, Activity, Users, Radio, MapPin, Search, Edit2, ShieldAlert, Menu, X } from 'lucide-react';
 
 export default function AdminPanel() {
   const navigate = useNavigate();
