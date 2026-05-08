@@ -473,7 +473,6 @@ void setup() {
   // Construir URLs dinámicamente
   serverUrl = "http://" + backendIP + ":3001/api/alarm";
   registerUrl = "http://" + backendIP + ":3001/api/esp/register";
-  pendingUrl = "http://" + backendIP + ":3001/api/esp/pending/";
 
   // ¡Conectado con éxito! -> Luz Azul Fija (per documentación)
   digitalWrite(PIN_LED_AZUL, HIGH);
