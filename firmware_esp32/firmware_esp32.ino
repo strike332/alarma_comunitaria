@@ -60,17 +60,21 @@ const unsigned long WIFI_CHECK_INTERVAL = 500; // Revisar cada 500ms
 
 // === COMMAND LONG POLLING (Respuesta instantánea desde la nube) ===
 bool pollingActive = false;
+unsigned long lastPollCheck = 0;
+const unsigned long POLL_GAP_MS = 1000;
 
 void consultarComandosPendientes() {
   if (WiFi.status() != WL_CONNECTED) return;
-  if (pollingActive) return; // Ya hay una conexión abierta
+  if (pollingActive) return;
+  if (millis() - lastPollCheck < POLL_GAP_MS) return;
   
+  lastPollCheck = millis();
   pollingActive = true;
   HTTPClient http;
   String mac = WiFi.macAddress();
   String pollUrl = "http://" + backendIP + ":3001/api/esp/pending/" + mac;
   http.begin(pollUrl);
-  http.setTimeout(5000); // 5s — balance entre rapidez y no bloquear el receptor RF
+  http.setTimeout(2000); // timeout corto: 2 segundos
 
   int httpCode = http.GET();
 
@@ -96,7 +100,6 @@ void consultarComandosPendientes() {
   }
   http.end();
   pollingActive = false;
-  // Reconexión inmediata en el próximo loop
 }
 
 WebServer server(80);
