@@ -27,10 +27,15 @@ export default function Register() {
     e.preventDefault();
     try {
       const res = await axios.post(`${API_BASE}/api/register`, formData);
-      localStorage.setItem('alarma_token', res.data.token);
-      localStorage.setItem('alarma_role', res.data.role);
-      localStorage.setItem('alarma_name', res.data.name);
-      navigate('/alarma');
+      if (res.data.token) {
+        localStorage.setItem('alarma_token', res.data.token);
+        localStorage.setItem('alarma_role', res.data.role);
+        localStorage.setItem('alarma_name', res.data.name);
+        navigate('/alarma');
+      } else {
+        alert('¡Cuenta creada con éxito! Ahora inicia sesión para activar tu suscripción.');
+        navigate('/');
+      }
     } catch (err) {
       setError(err.response?.data?.error || "Error de conexión");
     }

@@ -37,6 +37,20 @@ async function initDB() {
     try { await db.exec("ALTER TABLE users ADD COLUMN mp_preapproval_id TEXT;"); } catch(e) {}
     try { await db.exec("ALTER TABLE users ADD COLUMN fcm_token TEXT;"); } catch(e) {}
 
+    // Tabla de Planes de Suscripción
+    await db.exec(`
+        CREATE TABLE IF NOT EXISTS subscription_plans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            price INTEGER NOT NULL,
+            currency TEXT DEFAULT 'CLP',
+            duration_days INTEGER NOT NULL,
+            is_active INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+    `);
+
     // Tabla de Códigos Promocionales
     await db.exec(`
         CREATE TABLE IF NOT EXISTS promo_codes (
@@ -357,6 +371,32 @@ async function getAuthorizedRfCodesBySector(sector) {
     `, [sector]);
 }
 
+// --- Gestión de Planes de Suscripción ---
+
+async function createPlan(name, description, price, durationDays, currency = 'CLP') {
+    const res = await db.run(
+        `INSERT INTO subscription_plans (name, description, price, currency, duration_days) VALUES (?, ?, ?, ?, ?)`,
+        [name, description, price, currency, durationDays]
+    );
+    return res.lastID;
+}
+
+async function getAllPlans() {
+    return await db.all(`SELECT * FROM subscription_plans ORDER BY price ASC`);
+}
+
+async function getActivePlans() {
+    return await db.all(`SELECT * FROM subscription_plans WHERE is_active = 1 ORDER BY price ASC`);
+}
+
+async function togglePlan(id, isActive) {
+    await db.run(`UPDATE subscription_plans SET is_active = ? WHERE id = ?`, [isActive ? 1 : 0, id]);
+}
+
+async function deletePlan(id) {
+    await db.run(`DELETE FROM subscription_plans WHERE id = ?`, [id]);
+}
+
 module.exports = {
     initDB,
     getUserByPhone,
@@ -392,6 +432,11 @@ module.exports = {
     getAuthorizedRfCodesBySector,
     updateFcmToken,
     getFcmTokensBySector,
+    createPlan,
+    getAllPlans,
+    getActivePlans,
+    togglePlan,
+    deletePlan,
     run: async (sql, params) => await db.run(sql, params),
     get: async (sql, params) => await db.get(sql, params)
 };

@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { io } from 'socket.io-client';
 import { API_BASE } from './config';
-import { QrCode, LogOut, CheckCircle2, Camera, Trash2, Ticket, Plus, Clock, Activity, Users, Radio, MapPin, Search, Edit2, ShieldAlert } from 'lucide-react';
+import { QrCode, LogOut, CheckCircle2, Camera, Trash2, Ticket, Plus, Clock, Activity, Users, Radio, MapPin, Search, Edit2, ShieldAlert, Menu, X } from 'lucide-react';
 
 export default function AdminPanel() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   
   // Modals state
   const [modal, setModal] = useState(null); // { type: 'alert'|'prompt'|'editUser', data: {}, onConfirm: fn }
@@ -21,6 +22,7 @@ export default function AdminPanel() {
   const [usersList, setUsersList] = useState([]);
   const [sectorsList, setSectorsList] = useState([]);
   const [promoCodesList, setPromoCodesList] = useState([]);
+  const [plansList, setPlansList] = useState([]);
   const [sniffLog, setSniffLog] = useState([]);
   
   const [userSearch, setUserSearch] = useState('');
@@ -35,6 +37,10 @@ export default function AdminPanel() {
   const [newSectorName, setNewSectorName] = useState('');
   const [newPromoCode, setNewPromoCode] = useState('');
   const [newPromoDays, setNewPromoDays] = useState(30);
+  const [planName, setPlanName] = useState('');
+  const [planPrice, setPlanPrice] = useState('');
+  const [planDays, setPlanDays] = useState('30');
+  const [planDesc, setPlanDesc] = useState('');
 
   const [camSector, setCamSector] = useState('');
   const [camBrand, setCamBrand] = useState('hikvision');
@@ -64,6 +70,9 @@ export default function AdminPanel() {
   const fetchPromoCodes = async () => {
     try { const res = await axios.get(`${API_BASE}/api/admin/promo`, authHeader); setPromoCodesList(res.data); } catch(err) { console.error(err); }
   };
+  const fetchPlans = async () => {
+    try { const res = await axios.get(`${API_BASE}/api/admin/plans`, authHeader); setPlansList(Array.isArray(res.data) ? res.data : []); } catch(err) { console.error(err); }
+  };
 
   useEffect(() => {
     if (localStorage.getItem('alarma_role') !== 'admin') navigate('/');
@@ -75,7 +84,7 @@ export default function AdminPanel() {
     socket.on('rf_sniff_registered', data => setSniffLog(p => [{...data, known: true}, ...p].slice(0, 10)));
     socket.on('rf_sniff_unregistered', data => setSniffLog(p => [{...data, known: false}, ...p].slice(0, 10)));
 
-    fetchHardware(); fetchCameras(); fetchUsers(); fetchSectors(); fetchPromoCodes();
+    fetchHardware(); fetchCameras(); fetchUsers(); fetchSectors(); fetchPromoCodes(); fetchPlans();
 
     return () => socket.disconnect();
   }, [navigate]);
@@ -183,6 +192,32 @@ export default function AdminPanel() {
     });
   };
 
+  const handleCreatePlan = async (e) => {
+    e.preventDefault();
+    if (!planName || !planPrice || !planDays) return showAlert("Completa nombre, precio y días");
+    try {
+      await axios.post(`${API_BASE}/api/admin/plans`, {
+        name: planName, description: planDesc, price: parseInt(planPrice), duration_days: parseInt(planDays)
+      }, authHeader);
+      setPlanName(''); setPlanPrice(''); setPlanDays('30'); setPlanDesc('');
+      fetchPlans(); showAlert("Plan creado");
+    } catch(err) { showAlert("Error al crear plan"); }
+  };
+
+  const handleTogglePlan = async (id, isActive) => {
+    try {
+      await axios.patch(`${API_BASE}/api/admin/plans/${id}`, { is_active: !isActive }, authHeader);
+      fetchPlans();
+    } catch(err) { showAlert("Error"); }
+  };
+
+  const handleDeletePlan = (id) => {
+    showConfirm('¿Eliminar este plan?', async () => {
+      try { await axios.delete(`${API_BASE}/api/admin/plans/${id}`, authHeader); fetchPlans(); }
+      catch(err) { showAlert("Error al eliminar"); }
+    });
+  };
+
   const handleRegisterSector = async (e) => {
     e.preventDefault();
     if (!newSectorName) return;
@@ -275,23 +310,35 @@ export default function AdminPanel() {
     <div style={{ display: 'flex', minHeight: '100vh', background: '#0a0a0a', color: 'white', fontFamily: 'system-ui, sans-serif' }}>
       {renderModal()}
       
+      {/* Hamburger Mobile Button */}
+      <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{
+        position: 'fixed', top: '1rem', left: '1rem', zIndex: 1001, background: '#171717', border: '1px solid #333',
+        color: 'white', borderRadius: '0.5rem', padding: '0.5rem', cursor: 'pointer', display: 'none'
+      }} className="hamburger-btn">
+        {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
+      </button>
+
+      {/* Overlay mobile */}
+      {sidebarOpen && <div onClick={() => setSidebarOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 998 }} className="sidebar-overlay" />}
+
       {/* Sidebar */}
-      <aside style={{ width: '250px', background: '#171717', borderRight: '1px solid #333', display: 'flex', flexDirection: 'column' }}>
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`} style={{ width: '250px', background: '#171717', borderRight: '1px solid #333', display: 'flex', flexDirection: 'column', minHeight: '100vh', zIndex: 999 }}>
         <div style={{ padding: '1.5rem', borderBottom: '1px solid #333', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <ShieldAlert size={28} color="var(--primary)" />
           <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Admin Panel</h2>
         </div>
-        <nav style={{ flex: 1, padding: '1rem 0' }}>
+        <nav style={{ flex: 1, padding: '1rem 0', overflowY: 'auto' }}>
           {[
             { id: 'dashboard', icon: <Activity size={20}/>, label: 'Dashboard' },
             { id: 'users', icon: <Users size={20}/>, label: 'Usuarios' },
             { id: 'hardware', icon: <Radio size={20}/>, label: 'Hardware ESP32' },
             { id: 'cameras', icon: <Camera size={20}/>, label: 'Cámaras IP / P2P' },
             { id: 'sectors', icon: <MapPin size={20}/>, label: 'Sectores' },
+            { id: 'plans', icon: <CreditCard size={20}/>, label: 'Planes' },
             { id: 'promo', icon: <Ticket size={20}/>, label: 'Promociones' },
             { id: 'whatsapp', icon: <QrCode size={20}/>, label: 'WhatsApp Bot' },
           ].map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+            <button key={tab.id} onClick={() => { setActiveTab(tab.id); setSidebarOpen(false); }} style={{
               width: '100%', padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1rem',
               background: activeTab === tab.id ? 'var(--primary)' : 'transparent', color: 'white', border: 'none', cursor: 'pointer',
               textAlign: 'left', transition: 'background 0.2s'
@@ -658,6 +705,64 @@ export default function AdminPanel() {
           </div>
         )}
 
+        {activeTab === 'plans' && (
+          <div className="fade-in">
+            <h1 style={{ marginTop: 0 }}>Planes de Suscripción</h1>
+            <div style={{ background: '#171717', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #333', marginBottom: '2rem' }}>
+              <form onSubmit={handleCreatePlan} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                  <input type="text" required placeholder="Nombre del plan" value={planName} onChange={e => setPlanName(e.target.value)} style={{ flex: 2, padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #444', background: '#262626', color: 'white' }} />
+                  <input type="number" required placeholder="Precio (CLP)" value={planPrice} onChange={e => setPlanPrice(e.target.value)} style={{ flex: 1, padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #444', background: '#262626', color: 'white' }} />
+                  <input type="number" required placeholder="Días" value={planDays} onChange={e => setPlanDays(e.target.value)} style={{ flex: 1, padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #444', background: '#262626', color: 'white' }} />
+                </div>
+                <input type="text" placeholder="Descripción (opcional)" value={planDesc} onChange={e => setPlanDesc(e.target.value)} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #444', background: '#262626', color: 'white' }} />
+                <button type="submit" style={{ padding: '0.75rem 2rem', background: 'var(--medical)', border: 'none', color: 'white', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer', alignSelf: 'flex-start' }}>
+                  Crear Plan
+                </button>
+              </form>
+            </div>
+            <div style={{ background: '#171717', borderRadius: '1rem', border: '1px solid #333', overflowX: 'auto' }}>
+              <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#262626' }}>
+                    <th style={{ padding: '1rem' }}>Plan</th>
+                    <th style={{ padding: '1rem' }}>Precio</th>
+                    <th style={{ padding: '1rem' }}>Duración</th>
+                    <th style={{ padding: '1rem' }}>Estado</th>
+                    <th style={{ padding: '1rem' }}>Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {plansList.map(p => (
+                    <tr key={p.id} style={{ borderBottom: '1px solid #333' }}>
+                      <td style={{ padding: '1rem' }}>
+                        <div style={{ fontWeight: 'bold' }}>{p.name}</div>
+                        {p.description && <div style={{ fontSize: '0.8rem', color: 'gray' }}>{p.description}</div>}
+                      </td>
+                      <td style={{ padding: '1rem' }}>${p.price?.toLocaleString()} {p.currency}</td>
+                      <td style={{ padding: '1rem' }}>{p.duration_days} días</td>
+                      <td style={{ padding: '1rem' }}>
+                        <span style={{ color: p.is_active ? '#22c55e' : 'gray', fontWeight: 'bold' }}>
+                          {p.is_active ? 'Activo' : 'Inactivo'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '1rem', display: 'flex', gap: '0.5rem' }}>
+                        <button onClick={() => handleTogglePlan(p.id, p.is_active)} style={{ background: p.is_active ? '#444' : 'var(--medical)', border: 'none', color: 'white', padding: '0.5rem 0.75rem', borderRadius: '0.25rem', cursor: 'pointer', fontSize: '0.8rem' }}>
+                          {p.is_active ? 'Desactivar' : 'Activar'}
+                        </button>
+                        <button onClick={() => handleDeletePlan(p.id)} style={{ background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', padding: '0.5rem', borderRadius: '0.25rem', cursor: 'pointer' }}>
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {plansList.length === 0 && <tr><td colSpan="5" style={{ padding: '2rem', textAlign: 'center', color: 'gray' }}>No hay planes creados. Crea uno para que aparezca en el paywall.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'whatsapp' && (
           <div className="fade-in">
             <h1 style={{ marginTop: 0 }}>Estado de WhatsApp</h1>
@@ -690,6 +795,17 @@ export default function AdminPanel() {
       <style>{`
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @media (max-width: 768px) {
+          .sidebar { position: fixed; left: -260px; top: 0; bottom: 0; transition: left 0.3s; }
+          .sidebar.open { left: 0; }
+          .hamburger-btn { display: flex !important; }
+          table { font-size: 0.8rem; }
+          th, td { padding: 0.5rem !important; }
+        }
+        .sidebar-overlay { display: none; }
+        @media (max-width: 768px) {
+          .sidebar-overlay { display: block; }
+        }
       `}</style>
     </div>
   );

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
-import { ShieldAlert, CreditCard, Ticket, Loader } from 'lucide-react';
+import { ShieldAlert, CreditCard, Ticket, Loader, Wallet } from 'lucide-react';
 import { API_BASE } from './config';
 import './App.css';
 
@@ -16,6 +16,7 @@ export default function Login() {
   const [promoCode, setPromoCode] = useState('');
   const [promoError, setPromoError] = useState(null);
   const [promoLoading, setPromoLoading] = useState(false);
+  const [plans, setPlans] = useState([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -47,6 +48,7 @@ export default function Login() {
         // Suscripción vencida o inactiva → mostrar Paywall
         setPaywallPhone(phone);
         setShowPaywall(true);
+        fetchPlans();
       } else {
         setError(err.response?.data?.error || 'Error de conexión');
       }
@@ -72,15 +74,21 @@ export default function Login() {
     }
   };
 
-  const handlePay = async () => {
+  const handlePay = async (planId) => {
     try {
-      // Para pagar, el usuario primero entra con su teléfono y contraseña ya verificada
-      // Usamos un token temporal de pago (sin acceso al panel)
-      const res = await axios.post(`${API_BASE}/api/subscription/create-paywall`, { phone: paywallPhone });
+      const res = await axios.post(`${API_BASE}/api/subscription/create-paywall`, { phone: paywallPhone, plan_id: planId });
       if (res.data.init_point) window.location.href = res.data.init_point;
     } catch (err) {
       setPromoError('Error al conectar con Mercado Pago. Intenta de nuevo.');
     }
+  };
+
+  // Fetch plans when paywall shows
+  const fetchPlans = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/api/plans`);
+      setPlans(Array.isArray(res.data) ? res.data : []);
+    } catch {}
   };
 
   if (showPaywall) {
@@ -96,6 +104,32 @@ export default function Login() {
         </div>
 
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {/* Planes disponibles */}
+          {plans.length > 0 && (
+            <div style={{ marginBottom: '1rem' }}>
+              <h3 style={{ textAlign: 'center', marginBottom: '1rem' }}>Elige tu plan</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {plans.map(plan => (
+                  <button
+                    key={plan.id}
+                    onClick={() => handlePay(plan.id)}
+                    style={{ padding: '1rem', background: '#1e293b', color: 'white', border: '1px solid #334155', borderRadius: '0.75rem', cursor: 'pointer', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{plan.name}</div>
+                      {plan.description && <div style={{ color: 'gray', fontSize: '0.85rem' }}>{plan.description}</div>}
+                      <div style={{ color: 'gray', fontSize: '0.8rem', marginTop: '0.25rem' }}>{plan.duration_days} días</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontWeight: 'bold', fontSize: '1.2rem', color: 'var(--medical)' }}>${plan.price?.toLocaleString()}</span>
+                      <CreditCard size={20} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Opción 1: Código */}
           <div style={{ background: 'var(--card)', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #334155' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
@@ -121,13 +155,15 @@ export default function Login() {
             {promoError && <p style={{ color: 'var(--danger)', marginTop: '0.5rem', fontWeight: 'bold', fontSize: '0.9rem' }}>{promoError}</p>}
           </div>
 
-          {/* Opción 2: Pagar */}
-          <button
-            onClick={handlePay}
-            style={{ padding: '1.2rem', background: 'var(--danger)', color: 'white', border: 'none', borderRadius: '1rem', fontWeight: 'bold', fontSize: '1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
-          >
-            <CreditCard size={22} /> PAGAR SUSCRIPCIÓN
-          </button>
+          {/* Opción 2: Pagar (si no hay planes) */}
+          {plans.length === 0 && (
+            <button
+              onClick={() => handlePay(null)}
+              style={{ padding: '1.2rem', background: 'var(--danger)', color: 'white', border: 'none', borderRadius: '1rem', fontWeight: 'bold', fontSize: '1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+            >
+              <Wallet size={22} /> PAGAR SUSCRIPCIÓN
+            </button>
+          )}
 
           <button
             onClick={() => setShowPaywall(false)}

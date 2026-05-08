@@ -444,13 +444,8 @@ app.post('/api/register', authLimiter, async (req, res) => {
     const authHash = await bcrypt.hash(password, 10);
 
     try {
-        const userId = await db.registerUser(name, phone, authHash, address, sector);
-        const token = jwt.sign(
-            { id: userId, role: 'user', sector, name },
-            _JWT_SECRET,
-            { expiresIn: '30d' }
-        );
-        res.json({ token, role: 'user', name, sector });
+        await db.registerUser(name, phone, authHash, address, sector);
+        res.json({ status: "Cuenta creada. Inicia sesión para activar tu suscripción." });
     } catch (err) {
         res.status(500).json({ error: "Error al registrar en BD" });
     }
@@ -1214,21 +1209,34 @@ app.post('/api/subscription/create-paywall', async (req, res) => {
     const parsed = subscriptionPaywallSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Teléfono requerido" });
     const { phone } = parsed.data;
+    const planId = req.body.plan_id;
 
     try {
         const user = await db.getUserByPhone(phone);
         if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
 
+        let amount = 1500;
+        let reason = "Suscripción Mensual Alarma Comunitaria";
+
+        if (planId) {
+            const plans = await db.getAllPlans();
+            const plan = plans.find(p => p.id === parseInt(planId));
+            if (plan) {
+                amount = plan.price;
+                reason = plan.name;
+            }
+        }
+
         const preApproval = new PreApproval(mpClient);
 
         const body = {
-            reason: "Suscripción Mensual Alarma Comunitaria",
+            reason,
             external_reference: user.id.toString(),
             payer_email: "test_user_123@testuser.cl",
             auto_recurring: {
                 frequency: 1,
                 frequency_type: "months",
-                transaction_amount: 1500,
+                transaction_amount: amount,
                 currency_id: "CLP"
             },
             back_url: frontendUrl || "http://127.0.0.1:5173"
@@ -1406,6 +1414,45 @@ app.get('/api/esp/pending/:mac', async (req, res) => {
         clearInterval(checkInterval);
         clearTimeout(timeout);
     });
+});
+
+// ============================================================
+// API ROUTES — PLANES DE SUSCRIPCIÓN
+// ============================================================
+
+app.get('/api/plans', async (req, res) => {
+    const plans = await db.getActivePlans();
+    res.json(plans);
+});
+
+app.get('/api/admin/plans', verifyAdmin, async (req, res) => {
+    const plans = await db.getAllPlans();
+    res.json(plans);
+});
+
+app.post('/api/admin/plans', verifyAdmin, async (req, res) => {
+    const { name, description, price, duration_days, currency } = req.body;
+    if (!name || !price || !duration_days) return res.status(400).json({ error: "Nombre, precio y duración requeridos" });
+    try {
+        await db.createPlan(name, description || '', parseInt(price), parseInt(duration_days), currency || 'CLP');
+        res.json({ status: "Plan creado" });
+    } catch { res.status(500).json({ error: "Error al crear plan" }); }
+});
+
+app.patch('/api/admin/plans/:id', verifyAdmin, async (req, res) => {
+    const { is_active } = req.body;
+    if (is_active === undefined) return res.status(400).json({ error: "is_active requerido" });
+    try {
+        await db.togglePlan(req.params.id, is_active);
+        res.json({ status: "Plan actualizado" });
+    } catch { res.status(500).json({ error: "Error" }); }
+});
+
+app.delete('/api/admin/plans/:id', verifyAdmin, async (req, res) => {
+    try {
+        await db.deletePlan(req.params.id);
+        res.json({ status: "Plan eliminado" });
+    } catch { res.status(500).json({ error: "Error" }); }
 });
 
 // ============================================================
