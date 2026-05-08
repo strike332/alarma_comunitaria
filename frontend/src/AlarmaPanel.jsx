@@ -241,6 +241,32 @@ export default function AlarmaPanel() {
 
           <div className="setting-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '1rem' }}>
             <div className="setting-info" style={{ width: '100%', borderBottom: '1px solid gray', paddingBottom: '1rem' }}>
+              <span className="setting-title">Cambiar Contraseña</span>
+              <span className="setting-desc">Actualiza tu clave de acceso</span>
+            </div>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const oldPw = e.target.currentPassword.value;
+              const newPw = e.target.newPassword.value;
+              const token = localStorage.getItem('alarma_token');
+              try {
+                const res = await fetch(`${API_BASE}/api/change-password`, {
+                  method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                  body: JSON.stringify({ currentPassword: oldPw, newPassword: newPw })
+                });
+                const data = await res.json();
+                alert(res.ok ? 'Contraseña actualizada' : data.error);
+                if (res.ok) { e.target.reset(); }
+              } catch { alert('Error de conexión'); }
+            }} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <input name="currentPassword" type="password" required placeholder="Contraseña actual" style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid gray', background: 'var(--bg)', color: 'white' }} />
+              <input name="newPassword" type="password" required minLength="4" placeholder="Nueva contraseña (mín 4 caracteres)" style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid gray', background: 'var(--bg)', color: 'white' }} />
+              <button type="submit" style={{ padding: '0.75rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer' }}>CAMBIAR CONTRASEÑA</button>
+            </form>
+          </div>
+
+          <div className="setting-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '1rem' }}>
+            <div className="setting-info" style={{ width: '100%', borderBottom: '1px solid gray', paddingBottom: '1rem' }}>
                 <span className="setting-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <Ticket size={20} /> Código Promocional
                 </span>

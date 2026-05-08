@@ -24,6 +24,7 @@ export default function AdminPanel() {
   const [promoCodesList, setPromoCodesList] = useState([]);
   const [plansList, setPlansList] = useState([]);
   const [sniffLog, setSniffLog] = useState([]);
+  const [alarmLogs, setAlarmLogs] = useState([]);
   
   const [userSearch, setUserSearch] = useState('');
 
@@ -72,6 +73,9 @@ export default function AdminPanel() {
   };
   const fetchPlans = async () => {
     try { const res = await axios.get(`${API_BASE}/api/admin/plans`, authHeader); setPlansList(Array.isArray(res.data) ? res.data : []); } catch(err) { console.error(err); }
+  };
+  const fetchLogs = async () => {
+    try { const res = await axios.get(`${API_BASE}/api/admin/logs`, authHeader); setAlarmLogs(Array.isArray(res.data) ? res.data : []); } catch(err) { console.error(err); }
   };
 
   useEffect(() => {
@@ -218,6 +222,23 @@ export default function AdminPanel() {
     });
   };
 
+  const handlePromoteUser = (userId, currentRole) => {
+    const newRole = currentRole === 'admin' ? 'user' : 'admin';
+    showConfirm(`¿${newRole === 'admin' ? 'Promover a administrador' : 'Degradar a usuario'}?`, async () => {
+      try {
+        await axios.patch(`${API_BASE}/api/admin/users/${userId}/role`, { role: newRole }, authHeader);
+        fetchUsers(); showAlert("Rol actualizado");
+      } catch(err) { showAlert("Error al cambiar rol"); }
+    });
+  };
+
+  const handleCleanLogs = () => {
+    showConfirm('¿Eliminar registros de más de 30 días?', async () => {
+      try { await axios.post(`${API_BASE}/api/admin/logs/clean`, { days: 30 }, authHeader); fetchLogs(); showAlert("Registros limpiados"); }
+      catch(err) { showAlert("Error al limpiar"); }
+    });
+  };
+
   const handleRegisterSector = async (e) => {
     e.preventDefault();
     if (!newSectorName) return;
@@ -336,6 +357,7 @@ export default function AdminPanel() {
             { id: 'sectors', icon: <MapPin size={20}/>, label: 'Sectores' },
             { id: 'plans', icon: <CreditCard size={20}/>, label: 'Planes' },
             { id: 'promo', icon: <Ticket size={20}/>, label: 'Promociones' },
+            { id: 'logs', icon: <Activity size={20}/>, label: 'Registros' },
             { id: 'whatsapp', icon: <QrCode size={20}/>, label: 'WhatsApp Bot' },
           ].map(tab => (
             <button key={tab.id} onClick={() => { setActiveTab(tab.id); setSidebarOpen(false); }} style={{
@@ -446,8 +468,11 @@ export default function AdminPanel() {
                         </div>
                       </td>
                       <td style={{ padding: '1rem' }}>
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
-                              <button onClick={() => handleUpdateSubscription(usr.id)} title="Gestionar Suscripción" style={{ background: '#262626', border: '1px solid #444', color: 'white', padding: '0.5rem', borderRadius: '0.25rem', cursor: 'pointer' }}>
+                           <div style={{ display: 'flex', gap: '0.5rem' }}>
+                               <button onClick={() => handlePromoteUser(usr.id, usr.role)} title={usr.role === 'admin' ? 'Degradar a usuario' : 'Promover a admin'} style={{ background: usr.role === 'admin' ? '#f59e0b' : '#262626', border: '1px solid #444', color: 'white', padding: '0.5rem', borderRadius: '0.25rem', cursor: 'pointer' }}>
+                                   <ShieldAlert size={16} />
+                               </button>
+                               <button onClick={() => handleUpdateSubscription(usr.id)} title="Gestionar Suscripción" style={{ background: '#262626', border: '1px solid #444', color: 'white', padding: '0.5rem', borderRadius: '0.25rem', cursor: 'pointer' }}>
                                   <Clock size={16} />
                               </button>
                               <button onClick={() => handleAddControl(usr.id)} title="Añadir Llavero" style={{ background: 'var(--primary)', border: 'none', color: 'white', padding: '0.5rem', borderRadius: '0.25rem', cursor: 'pointer' }}>
@@ -659,6 +684,41 @@ export default function AdminPanel() {
                 </div>
               ))}
               {sectorsList.length === 0 && <p style={{ color: 'gray' }}>No hay sectores creados.</p>}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'logs' && (
+          <div className="fade-in">
+            <h1 style={{ marginTop: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              Registro de Actividad
+              <button onClick={handleCleanLogs} style={{ padding: '0.5rem 1rem', background: '#262626', color: 'var(--danger)', border: '1px solid #444', borderRadius: '0.5rem', cursor: 'pointer', fontSize: '0.85rem' }}>
+                Limpiar +30 días
+              </button>
+            </h1>
+            <button onClick={fetchLogs} style={{ marginBottom: '1rem', padding: '0.5rem 1rem', background: 'var(--primary)', border: 'none', color: 'white', borderRadius: '0.5rem', cursor: 'pointer' }}>Cargar registros</button>
+            <div style={{ background: '#171717', borderRadius: '1rem', border: '1px solid #333', overflowX: 'auto' }}>
+              <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#262626' }}>
+                    <th style={{ padding: '1rem' }}>Fecha</th>
+                    <th style={{ padding: '1rem' }}>Usuario</th>
+                    <th style={{ padding: '1rem' }}>Evento</th>
+                    <th style={{ padding: '1rem' }}>Sector</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {alarmLogs.map((log, i) => (
+                    <tr key={log.id || i} style={{ borderBottom: '1px solid #333' }}>
+                      <td style={{ padding: '1rem', fontSize: '0.85rem' }}>{new Date(log.timestamp).toLocaleString()}</td>
+                      <td style={{ padding: '1rem' }}>{log.user_name || 'Sistema'}</td>
+                      <td style={{ padding: '1rem' }}>{log.event_type}</td>
+                      <td style={{ padding: '1rem' }}>{log.sector}</td>
+                    </tr>
+                  ))}
+                  {alarmLogs.length === 0 && <tr><td colSpan="4" style={{ padding: '2rem', textAlign: 'center', color: 'gray' }}>Clic en "Cargar registros" para ver la actividad.</td></tr>}
+                </tbody>
+              </table>
             </div>
           </div>
         )}

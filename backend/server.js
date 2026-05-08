@@ -1369,6 +1369,54 @@ app.delete('/api/admin/users/:userId', verifyAdmin, async (req, res) => {
     }
 });
 
+app.put('/api/change-password', verifyUser, async (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) return res.status(400).json({ error: "Ambas contraseñas requeridas" });
+    if (newPassword.length < 4) return res.status(400).json({ error: "Nueva contraseña muy corta (mín 4)" });
+
+    try {
+        const user = await db.getUserByPhone(req.user.id ? (await db.getUserById(req.user.id))?.phone : null);
+        const fullUser = await db.getUserById(req.user.id);
+        const valid = await bcrypt.compare(currentPassword, (await db.get(`SELECT password_hash FROM users WHERE id = ?`, [req.user.id])).password_hash);
+        if (!valid) return res.status(401).json({ error: "Contraseña actual incorrecta" });
+
+        const newHash = await bcrypt.hash(newPassword, 10);
+        await db.changePassword(req.user.id, newHash);
+        res.json({ status: "Contraseña actualizada" });
+    } catch {
+        res.status(500).json({ error: "Error al cambiar contraseña" });
+    }
+});
+
+app.patch('/api/admin/users/:userId/role', verifyAdmin, async (req, res) => {
+    const { role } = req.body;
+    if (!role || !['admin', 'user'].includes(role)) return res.status(400).json({ error: "Rol inválido" });
+    try {
+        if (role === 'admin') await db.promoteToAdmin(req.params.userId);
+        else await db.demoteFromAdmin(req.params.userId);
+        res.json({ status: `Usuario ${role === 'admin' ? 'promovido a admin' : 'degradado a usuario'}` });
+    } catch { res.status(500).json({ error: "Error al cambiar rol" }); }
+});
+
+app.get('/api/admin/logs', verifyAdmin, async (req, res) => {
+    const logs = await db.getAlarmLogs(200);
+    res.json(logs);
+});
+
+app.post('/api/admin/logs/clean', verifyAdmin, async (req, res) => {
+    const { days } = req.body;
+    try {
+        await db.cleanOldAlarmLogs(days || 30);
+        await db.cleanOldPromoLogs(days || 30);
+        res.json({ status: `Registros de más de ${days || 30} días limpiados` });
+    } catch { res.status(500).json({ error: "Error al limpiar" }); }
+});
+
+// Limpieza automática diaria
+setInterval(async () => {
+    try { await db.cleanOldAlarmLogs(30); await db.cleanOldPromoLogs(30); } catch {}
+}, 86400000);
+
 // ============================================================
 // API ROUTES — ESP32 WHITELIST
 // ============================================================

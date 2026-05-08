@@ -397,6 +397,34 @@ async function deletePlan(id) {
     await db.run(`DELETE FROM subscription_plans WHERE id = ?`, [id]);
 }
 
+// --- Gestión de contraseñas y roles ---
+
+async function changePassword(userId, newHash) {
+    await db.run(`UPDATE users SET password_hash = ? WHERE id = ?`, [newHash, userId]);
+}
+
+async function promoteToAdmin(userId) {
+    await db.run(`UPDATE users SET role = 'admin' WHERE id = ?`, [userId]);
+}
+
+async function demoteFromAdmin(userId) {
+    await db.run(`UPDATE users SET role = 'user' WHERE id = ?`, [userId]);
+}
+
+// --- Limpieza de registros ---
+
+async function cleanOldAlarmLogs(days = 30) {
+    await db.run(`DELETE FROM alarm_logs WHERE timestamp < datetime('now', ?)`, [`-${days} days`]);
+}
+
+async function cleanOldPromoLogs(days = 30) {
+    await db.run(`UPDATE promo_codes SET used_by_user_id = NULL, is_used = 0 WHERE is_used = 1 AND created_at < datetime('now', ?)`, [`-${days} days`]);
+}
+
+async function getAlarmLogs(limit = 100) {
+    return await db.all(`SELECT a.*, u.name as user_name FROM alarm_logs a LEFT JOIN users u ON a.user_id = u.id ORDER BY a.timestamp DESC LIMIT ?`, [limit]);
+}
+
 module.exports = {
     initDB,
     getUserByPhone,
@@ -437,6 +465,12 @@ module.exports = {
     getActivePlans,
     togglePlan,
     deletePlan,
+    changePassword,
+    promoteToAdmin,
+    demoteFromAdmin,
+    cleanOldAlarmLogs,
+    cleanOldPromoLogs,
+    getAlarmLogs,
     run: async (sql, params) => await db.run(sql, params),
     get: async (sql, params) => await db.get(sql, params)
 };
