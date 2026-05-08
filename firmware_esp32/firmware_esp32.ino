@@ -58,10 +58,46 @@ const unsigned long SYNC_INTERVAL_MS = 300000; // Sincronizar cada 5 minutos
 unsigned long lastWifiCheckTime = 0;
 const unsigned long WIFI_CHECK_INTERVAL = 500; // Revisar cada 500ms
 
-// === COMMAND POLLING (Nube → ESP32) ===
-unsigned long lastPollTime = 0;
-const unsigned long POLL_INTERVAL_MS = 3000; // Consultar comandos cada 3 segundos
-String pendingUrl;
+// === COMMAND LONG POLLING (Respuesta instantánea desde la nube) ===
+bool pollingActive = false;
+
+void consultarComandosPendientes() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  if (pollingActive) return; // Ya hay una conexión abierta
+  
+  pollingActive = true;
+  HTTPClient http;
+  String mac = WiFi.macAddress();
+  String pollUrl = "http://" + backendIP + ":3001/api/esp/pending/" + mac;
+  http.begin(pollUrl);
+  http.setTimeout(5000); // 5s — balance entre rapidez y no bloquear el receptor RF
+
+  int httpCode = http.GET();
+
+  if (httpCode == 200) {
+    String body = http.getString();
+    if (body.indexOf("\"activar\"") > 0 || body.indexOf("\"toggle\"") > 0) {
+      Serial.println("📋 Comando instantáneo: ACTIVAR");
+      if (!isAlarmActive) encenderAlarma();
+    } else if (body.indexOf("\"silenciar\"") > 0) {
+      Serial.println("📋 Comando instantáneo: SILENCIAR");
+      if (isAlarmActive) apagarAlarma();
+    } else if (body.indexOf("\"identificar\"") > 0) {
+      Serial.println("📋 Comando instantáneo: IDENTIFICAR");
+      for (int i = 0; i < 3; i++) {
+        pinMode(PIN_RELE_EXTERNO, OUTPUT);
+        digitalWrite(PIN_RELE_EXTERNO, LOW); digitalWrite(PIN_BUZZER, HIGH);
+        delay(150);
+        digitalWrite(PIN_RELE_EXTERNO, HIGH); digitalWrite(PIN_BUZZER, LOW);
+        delay(150);
+      }
+      apagarAlarma();
+    }
+  }
+  http.end();
+  pollingActive = false;
+  // Reconexión inmediata en el próximo loop
+}
 
 WebServer server(80);
 
@@ -483,9 +519,8 @@ void loop() {
     sincronizarWhitelist();
   }
 
-  // Polling de comandos desde la nube (cada 3 segundos)
-  if (WiFi.status() == WL_CONNECTED && (millis() - lastPollTime > POLL_INTERVAL_MS)) {
-    lastPollTime = millis();
+  // Long polling de comandos desde la nube (conexión persistente, respuesta instantánea)
+  if (WiFi.status() == WL_CONNECTED && !pollingActive) {
     consultarComandosPendientes();
   }
 

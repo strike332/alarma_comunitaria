@@ -1372,21 +1372,40 @@ app.get('/api/esp/authorized-codes/:mac', async (req, res) => {
 // API ROUTES — ESP32 COMMAND POLLING (NAT traversal)
 // ============================================================
 
-// ESP32 consulta si hay comandos pendientes cada ~3 segundos
+// ESP32 mantiene conexión abierta (long polling) — respuesta instantánea
 app.get('/api/esp/pending/:mac', async (req, res) => {
     const mac = req.params.mac.toUpperCase();
     const hwRow = await db.verifyHardware(mac);
     if (!hwRow) return res.status(403).json({ error: "MAC no registrada" });
 
-    // Actualizar lastSeen para el dashboard
     if (espDevices[mac]) espDevices[mac].lastSeen = Date.now();
 
+    // Si ya hay comando → responder al instante
     const cmd = pendingCommands[mac];
     if (cmd && (Date.now() - cmd.timestamp < 15000)) {
         delete pendingCommands[mac];
         return res.json({ action: cmd.action });
     }
-    res.json({ action: null });
+
+    // Long poll: esperar hasta 25s por un comando nuevo
+    const checkInterval = setInterval(() => {
+        const newCmd = pendingCommands[mac];
+        if (newCmd && (Date.now() - newCmd.timestamp < 15000)) {
+            clearInterval(checkInterval);
+            delete pendingCommands[mac];
+            if (!res.headersSent) res.json({ action: newCmd.action });
+        }
+    }, 200);
+
+    const timeout = setTimeout(() => {
+        clearInterval(checkInterval);
+        if (!res.headersSent) res.json({ action: null });
+    }, 6000);
+
+    req.on('close', () => {
+        clearInterval(checkInterval);
+        clearTimeout(timeout);
+    });
 });
 
 // ============================================================
