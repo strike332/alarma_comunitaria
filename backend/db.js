@@ -192,7 +192,7 @@ async function getAllCameras() {
 
 async function getUserByRfCode(rfCode) {
     return await db.get(`
-        SELECT u.id, u.name, u.phone, u.address, u.sector 
+        SELECT u.id, u.name, u.phone, u.address, u.sector, u.role, u.subscription_status, u.subscription_expiry
         FROM rf_controls r
         JOIN users u ON r.user_id = u.id
         WHERE r.rf_code = ?
