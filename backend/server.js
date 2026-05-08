@@ -321,7 +321,13 @@ const testModeUsers = new Set();
 const whatsapp = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--single-process',
+            '--user-data-dir=/tmp/puppeteer_chromium',
+        ],
         headless: true,
     }
 });
