@@ -248,6 +248,7 @@ app.use(helmet({
     },
     crossOriginResourcePolicy: { policy: "cross-origin" },
     crossOriginOpenerPolicy: false,
+    strictTransportSecurity: false,
 }));
 
 // CORS
