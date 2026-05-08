@@ -214,7 +214,7 @@ const authLimiter = rateLimit({
 
 const alarmLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 10,
+    max: 30,
     message: { error: "Demasiadas alertas. Espera un minuto." },
 });
 
@@ -259,8 +259,11 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '1mb' }));
 
-// Rate limiting general
-app.use('/api/', generalLimiter);
+// Rate limiting global (excepto ESP32 que necesita polling frecuente)
+app.use('/api/', (req, res, next) => {
+    if (req.path.startsWith('/api/esp/')) return next(); // Sin límite para IoT
+    generalLimiter(req, res, next);
+});
 
 // Servir frontend estático en producción
 if (isProduction) {
