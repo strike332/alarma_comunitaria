@@ -950,7 +950,7 @@ app.get('/api/admin/hardware', verifyAdmin, async (req, res) => {
     const hardware = await db.getAllHardware();
     const result = hardware.map(hw => {
         const esp = espDevices[hw.mac_address];
-        const online = esp && (now - esp.lastSeen < 120000);
+        const online = esp && (now - esp.lastSeen < 300000);
         return {
             ...hw,
             isOnline: online,
@@ -967,7 +967,7 @@ app.post('/api/admin/hardware/scan', verifyAdmin, async (req, res) => {
     const hardware = await db.getAllHardware();
     const result = hardware.map(hw => {
         const esp = espDevices[hw.mac_address];
-        const online = esp && (now - esp.lastSeen < 120000);
+        const online = esp && (now - esp.lastSeen < 300000);
         return { ...hw, isOnline: online, ip: esp ? esp.ip : null, lastSeen: esp ? esp.lastSeen : null };
     });
     res.json(result);
@@ -1445,7 +1445,12 @@ app.get('/api/esp/pending/:mac', async (req, res) => {
     const hwRow = await db.verifyHardware(mac);
     if (!hwRow) return res.status(403).json({ error: "MAC no registrada" });
 
-    if (espDevices[mac]) espDevices[mac].lastSeen = Date.now();
+    // Siempre actualizar lastSeen (incluso si no estaba en caché)
+    if (espDevices[mac]) {
+        espDevices[mac].lastSeen = Date.now();
+    } else {
+        espDevices[mac] = { ip: null, sector: hwRow.sector, lastSeen: Date.now() };
+    }
 
     // Si ya hay comando → responder al instante
     const cmd = pendingCommands[mac];
