@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
-import { ShieldAlert, CreditCard, Ticket, Loader, Wallet } from 'lucide-react';
+import { ShieldAlert, CreditCard, Ticket, Loader } from 'lucide-react';
 import { API_BASE } from './config';
 import './App.css';
 
@@ -161,7 +161,7 @@ export default function Login() {
               onClick={() => handlePay(null)}
               style={{ padding: '1.2rem', background: 'var(--danger)', color: 'white', border: 'none', borderRadius: '1rem', fontWeight: 'bold', fontSize: '1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
             >
-              <Wallet size={22} /> PAGAR SUSCRIPCIÓN
+              <CreditCard size={22} /> PAGAR SUSCRIPCIÓN
             </button>
           )}
 
