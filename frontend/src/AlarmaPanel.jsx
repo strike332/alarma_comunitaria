@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
-import { Siren, Stethoscope, Users, ShieldAlert, Settings, Moon, Sun, ArrowLeft, LogOut, Radio, Trash2, CreditCard, Ticket, Clock, Flame } from 'lucide-react';
+import { Siren, Stethoscope, Users, ShieldAlert, Settings, Moon, Sun, ArrowLeft, LogOut, Radio, Trash2, CreditCard, Ticket, Clock, Flame, Video } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { initPushNotifications } from './PushService';
 import { initWidgetService, showPersistentWidget, addWidgetListener } from './WidgetService';
