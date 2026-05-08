@@ -273,6 +273,13 @@ void sincronizarWhitelist() {
   lastSyncTime = millis();
 }
 
+bool isCodeAuthorized(String rfCode) {
+  for (int i = 0; i < authorizedCount; i++) {
+    if (authorizedCodes[i] == rfCode) return true;
+  }
+  return false;
+}
+
 // ============================================================
 // FUNCIÓN: Registrar IP del ESP en el Backend de Node.js
 // ============================================================
