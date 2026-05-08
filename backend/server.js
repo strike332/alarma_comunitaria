@@ -305,6 +305,7 @@ let espDevices = {};
 let activeAlarmIP = null;
 let activeAlarmsBySector = {};
 let lastAlerts = {};
+let pendingCommands = {}; // { macAddress: { action, timestamp } } — cola para ESP32 remotos
 let currentQR = null;
 let whatsAppStatus = 'cargando';
 let rfListeningFor = null;
@@ -864,22 +865,32 @@ app.post('/api/alarm', alarmLimiter, async (req, res) => {
         console.error("Error al enviar WhatsApp:", err.message);
     }
 
-    // Activar alarma física (ESP32)
+    // Activar alarma física (ESP32) — intenta HTTP, si no → cola
     if (macAddress && rfCode) {
         return res.status(200).json({ status: "Alerta distribuida", data: neighbor, action: "toggle" });
     }
 
+    let disparado = false;
     const espIP = obtenerIPdelESP(neighbor.sector);
     if (espIP) {
         try {
             console.log(`>> Disparando /activar en ESP32: http://${espIP}/activar`);
             await axios.get(`http://${espIP}/activar`, { timeout: 4000 });
             console.log(`<< Acción física completada en ${neighbor.sector}`);
+            disparado = true;
         } catch (err) {
-            console.error(`⚠️ No se pudo controlar alarma física en ${espIP}:`, err.message);
+            console.log(`⚠️ HTTP directo falló: ${err.message}. Encolando...`);
         }
-    } else {
-        console.log(`⚠️ No hay ESP32 registrado para el sector ${neighbor.sector}.`);
+    }
+
+    if (!disparado) {
+        const espmac = Object.keys(espDevices).find(m => espDevices[m].sector === neighbor.sector);
+        if (espmac) {
+            pendingCommands[espmac] = { action: 'activar', timestamp: Date.now() };
+            console.log(`📋 Comando encolado para ESP ${espmac}: activar`);
+        } else {
+            console.log(`⚠️ No hay ESP32 registrado para el sector ${neighbor.sector}. Alerta solo digital.`);
+        }
     }
 
     res.status(200).json({ status: "Alerta distribuida", data: neighbor });
@@ -903,17 +914,16 @@ app.post('/api/silenciar', verifyUser, async (req, res) => {
             console.log(`<< ESP32 [${mac}] silenciado`);
             silenced = true;
         } catch (err) {
-            console.error(`Fallo al silenciar ESP32 [${mac}]:`, err.message);
+            console.log(`HTTP directo falló para [${mac}], encolando...`);
+            pendingCommands[mac] = { action: 'silenciar', timestamp: Date.now() };
+            silenced = true;
         }
     }
 
     if (!silenced && activeAlarmIP) {
         try {
-            console.log(`>> Fallback: Silenciando IP legacy ${activeAlarmIP}...`);
             await axios.get(`http://${activeAlarmIP}/silenciar`, { timeout: 4000 });
-        } catch (err) {
-            console.error("Fallo silenciar fallback:", err.message);
-        }
+        } catch {}
     }
 
     res.json({ status: "Alerta Cancelada Exitosamente" });
@@ -960,15 +970,22 @@ app.post('/api/admin/hardware/scan', verifyAdmin, async (req, res) => {
 app.post('/api/admin/hardware/:mac/action', verifyAdmin, async (req, res) => {
     const { mac } = req.params;
     const { action } = req.body;
-    const esp = espDevices[mac];
-    if (!esp || !esp.ip) return res.status(404).json({ error: "Dispositivo offline o no encontrado" });
+    const macUpper = mac.toUpperCase();
+    const hwRow = await db.verifyHardware(macUpper);
+    if (!hwRow) return res.status(404).json({ error: "Hardware no registrado" });
 
-    try {
-        await axios.get(`http://${esp.ip}/${action}`, { timeout: 3000 });
-        res.json({ status: `Instrucción '${action}' completada` });
-    } catch (err) {
-        res.status(500).json({ error: "Placa no respondió", details: err.message });
+    // Intentar HTTP directo primero (LAN), si falla → cola de comandos
+    const esp = espDevices[macUpper];
+    if (esp && esp.ip) {
+        try {
+            await axios.get(`http://${esp.ip}/${action}`, { timeout: 3000 });
+            return res.json({ status: `Instrucción '${action}' completada vía HTTP` });
+        } catch {}
     }
+
+    // Modo remoto: encolar comando para que el ESP32 lo recoja vía polling
+    pendingCommands[macUpper] = { action, timestamp: Date.now() };
+    res.json({ status: `Comando '${action}' encolado. El ESP32 lo ejecutará en ~3s.` });
 });
 
 app.get('/api/admin/users', verifyAdmin, async (req, res) => {
@@ -1349,6 +1366,27 @@ app.get('/api/esp/authorized-codes/:mac', async (req, res) => {
     } catch {
         res.status(500).json({ error: "Error al obtener códigos autorizados" });
     }
+});
+
+// ============================================================
+// API ROUTES — ESP32 COMMAND POLLING (NAT traversal)
+// ============================================================
+
+// ESP32 consulta si hay comandos pendientes cada ~3 segundos
+app.get('/api/esp/pending/:mac', async (req, res) => {
+    const mac = req.params.mac.toUpperCase();
+    const hwRow = await db.verifyHardware(mac);
+    if (!hwRow) return res.status(403).json({ error: "MAC no registrada" });
+
+    // Actualizar lastSeen para el dashboard
+    if (espDevices[mac]) espDevices[mac].lastSeen = Date.now();
+
+    const cmd = pendingCommands[mac];
+    if (cmd && (Date.now() - cmd.timestamp < 15000)) {
+        delete pendingCommands[mac];
+        return res.json({ action: cmd.action });
+    }
+    res.json({ action: null });
 });
 
 // ============================================================

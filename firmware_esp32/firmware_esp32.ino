@@ -58,6 +58,11 @@ const unsigned long SYNC_INTERVAL_MS = 300000; // Sincronizar cada 5 minutos
 unsigned long lastWifiCheckTime = 0;
 const unsigned long WIFI_CHECK_INTERVAL = 500; // Revisar cada 500ms
 
+// === COMMAND POLLING (Nube → ESP32) ===
+unsigned long lastPollTime = 0;
+const unsigned long POLL_INTERVAL_MS = 3000; // Consultar comandos cada 3 segundos
+String pendingUrl;
+
 WebServer server(80);
 
 // ============================================================
@@ -232,11 +237,43 @@ void sincronizarWhitelist() {
   lastSyncTime = millis();
 }
 
-bool isCodeAuthorized(String rfCode) {
-  for (int i = 0; i < authorizedCount; i++) {
-    if (authorizedCodes[i] == rfCode) return true;
+// ============================================================
+// FUNCIÓN: Polling de comandos desde la nube (NAT traversal)
+// ============================================================
+void consultarComandosPendientes() {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  HTTPClient http;
+  String mac = WiFi.macAddress();
+  String pollUrl = "http://" + backendIP + ":3001/api/esp/pending/" + mac;
+  http.begin(pollUrl);
+  http.setTimeout(3000);
+  
+  int httpCode = http.GET();
+  
+  if (httpCode == 200) {
+    String body = http.getString();
+    // Parsear {"action":"activar"} ó {"action":null}
+    if (body.indexOf("\"activar\"") > 0 || body.indexOf("\"toggle\"") > 0) {
+      Serial.println("📋 Comando recibido: ACTIVAR");
+      if (!isAlarmActive) encenderAlarma();
+    } else if (body.indexOf("\"silenciar\"") > 0) {
+      Serial.println("📋 Comando recibido: SILENCIAR");
+      if (isAlarmActive) apagarAlarma();
+    } else if (body.indexOf("\"identificar\"") > 0) {
+      Serial.println("📋 Comando recibido: IDENTIFICAR");
+      // Parpadeo rápido 3 veces
+      for (int i = 0; i < 3; i++) {
+        pinMode(PIN_RELE_EXTERNO, OUTPUT);
+        digitalWrite(PIN_RELE_EXTERNO, LOW); digitalWrite(PIN_BUZZER, HIGH);
+        delay(150);
+        digitalWrite(PIN_RELE_EXTERNO, HIGH); digitalWrite(PIN_BUZZER, LOW);
+        delay(150);
+      }
+      apagarAlarma();
+    }
   }
-  return false;
+  http.end();
 }
 
 // ============================================================
@@ -400,6 +437,7 @@ void setup() {
   // Construir URLs dinámicamente
   serverUrl = "http://" + backendIP + ":3001/api/alarm";
   registerUrl = "http://" + backendIP + ":3001/api/esp/register";
+  pendingUrl = "http://" + backendIP + ":3001/api/esp/pending/";
 
   // ¡Conectado con éxito! -> Luz Azul Fija (per documentación)
   digitalWrite(PIN_LED_AZUL, HIGH);
@@ -443,6 +481,12 @@ void loop() {
   // Sincronización periódica de whitelist (cada 5 min)
   if (WiFi.status() == WL_CONNECTED && (millis() - lastSyncTime > SYNC_INTERVAL_MS)) {
     sincronizarWhitelist();
+  }
+
+  // Polling de comandos desde la nube (cada 3 segundos)
+  if (WiFi.status() == WL_CONNECTED && (millis() - lastPollTime > POLL_INTERVAL_MS)) {
+    lastPollTime = millis();
+    consultarComandosPendientes();
   }
 
   // Capa de Auto-Silencio (Seguro Vecinal 3 Minutos)
