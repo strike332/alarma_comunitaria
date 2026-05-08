@@ -699,6 +699,14 @@ app.post('/api/alarm', alarmLimiter, async (req, res) => {
     }
     if (macAddress && type !== 'Silenciar') lastAlerts[macAddress] = Date.now();
 
+    // Actualizar lastSeen del ESP32 (también actualiza IP si cambió)
+    if (macAddress && ip) {
+        const hwSector = await db.verifyHardware(macAddress);
+        if (hwSector) {
+            espDevices[macAddress] = { ip, sector: hwSector.sector, lastSeen: Date.now() };
+        }
+    }
+
     let neighbor;
 
     if (macAddress && rfCode) {
@@ -938,12 +946,14 @@ app.post('/api/silenciar', verifyUser, async (req, res) => {
 // ============================================================
 
 app.get('/api/admin/hardware', verifyAdmin, async (req, res) => {
+    const now = Date.now();
     const hardware = await db.getAllHardware();
     const result = hardware.map(hw => {
         const esp = espDevices[hw.mac_address];
+        const online = esp && (now - esp.lastSeen < 120000);
         return {
             ...hw,
-            isOnline: !!esp,
+            isOnline: online,
             ip: esp ? esp.ip : null,
             lastSeen: esp ? esp.lastSeen : null
         };
@@ -952,21 +962,13 @@ app.get('/api/admin/hardware', verifyAdmin, async (req, res) => {
 });
 
 app.post('/api/admin/hardware/scan', verifyAdmin, async (req, res) => {
-    let pings = [];
-    for (const mac in espDevices) {
-        const ip = espDevices[mac].ip;
-        pings.push(
-            axios.get(`http://${ip}/status`, { timeout: 2000 })
-                .then(() => { espDevices[mac].lastSeen = Date.now(); })
-                .catch(() => { delete espDevices[mac]; })
-        );
-    }
-    await Promise.allSettled(pings);
-
+    // Actualizar estado: online si tuvo actividad en los últimos 2 minutos
+    const now = Date.now();
     const hardware = await db.getAllHardware();
     const result = hardware.map(hw => {
         const esp = espDevices[hw.mac_address];
-        return { ...hw, isOnline: !!esp, ip: esp ? esp.ip : null, lastSeen: esp ? esp.lastSeen : null };
+        const online = esp && (now - esp.lastSeen < 120000);
+        return { ...hw, isOnline: online, ip: esp ? esp.ip : null, lastSeen: esp ? esp.lastSeen : null };
     });
     res.json(result);
 });

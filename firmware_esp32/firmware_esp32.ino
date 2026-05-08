@@ -484,9 +484,10 @@ void loop() {
   // Verificar si alguien presionó el botón de reset WiFi (PIN 13)
   verificarBotonWiFi();
 
-  // Sincronización periódica de whitelist (cada 5 min)
+  // Sincronización periódica de whitelist + re-registro (cada 5 min)
   if (WiFi.status() == WL_CONNECTED && (millis() - lastSyncTime > SYNC_INTERVAL_MS)) {
     sincronizarWhitelist();
+    registrarEnBackend(); // Re-registrar IP por si el servidor se reinició
   }
 
   // Long polling de comandos desde la nube (conexión persistente, respuesta instantánea)
