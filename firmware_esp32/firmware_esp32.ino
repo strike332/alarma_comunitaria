@@ -274,45 +274,6 @@ void sincronizarWhitelist() {
 }
 
 // ============================================================
-// FUNCIÓN: Polling de comandos desde la nube (NAT traversal)
-// ============================================================
-void consultarComandosPendientes() {
-  if (WiFi.status() != WL_CONNECTED) return;
-
-  HTTPClient http;
-  String mac = WiFi.macAddress();
-  String pollUrl = "http://" + backendIP + ":3001/api/esp/pending/" + mac;
-  http.begin(pollUrl);
-  http.setTimeout(3000);
-  
-  int httpCode = http.GET();
-  
-  if (httpCode == 200) {
-    String body = http.getString();
-    // Parsear {"action":"activar"} ó {"action":null}
-    if (body.indexOf("\"activar\"") > 0 || body.indexOf("\"toggle\"") > 0) {
-      Serial.println("📋 Comando recibido: ACTIVAR");
-      if (!isAlarmActive) encenderAlarma();
-    } else if (body.indexOf("\"silenciar\"") > 0) {
-      Serial.println("📋 Comando recibido: SILENCIAR");
-      if (isAlarmActive) apagarAlarma();
-    } else if (body.indexOf("\"identificar\"") > 0) {
-      Serial.println("📋 Comando recibido: IDENTIFICAR");
-      // Parpadeo rápido 3 veces
-      for (int i = 0; i < 3; i++) {
-        pinMode(PIN_RELE_EXTERNO, OUTPUT);
-        digitalWrite(PIN_RELE_EXTERNO, LOW); digitalWrite(PIN_BUZZER, HIGH);
-        delay(150);
-        digitalWrite(PIN_RELE_EXTERNO, HIGH); digitalWrite(PIN_BUZZER, LOW);
-        delay(150);
-      }
-      apagarAlarma();
-    }
-  }
-  http.end();
-}
-
-// ============================================================
 // FUNCIÓN: Registrar IP del ESP en el Backend de Node.js
 // ============================================================
 void registrarEnBackend() {
