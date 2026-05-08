@@ -261,7 +261,7 @@ app.use(express.json({ limit: '1mb' }));
 
 // Rate limiting global (excepto ESP32 que necesita polling frecuente)
 app.use('/api/', (req, res, next) => {
-    if (req.path.startsWith('/api/esp/')) return next(); // Sin límite para IoT
+    if (req.path.startsWith('/esp/')) return next();
     generalLimiter(req, res, next);
 });
 
