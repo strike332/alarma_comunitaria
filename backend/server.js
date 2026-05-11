@@ -1111,7 +1111,7 @@ app.get('/api/admin/cameras', verifyAdmin, async (req, res) => {
 });
 
 app.post('/api/admin/cameras', verifyAdmin, async (req, res) => {
-    const { sector, brand, stream_link, rtsp_url, connection_type } = req.body;
+    const { sector, brand, stream_link, rtsp_url, connection_type, ip_address, username, password } = req.body;
 
     if (!sector) {
         return res.status(400).json({ error: "El sector es requerido" });
@@ -1119,8 +1119,8 @@ app.post('/api/admin/cameras', verifyAdmin, async (req, res) => {
 
     try {
         await db.run(
-            `INSERT INTO cameras (sector, brand, stream_link, rtsp_url, connection_type) VALUES (?, ?, ?, ?, ?)`,
-            [sector, brand || 'hikvision', stream_link || '', rtsp_url || '', connection_type || 'ip']
+            `INSERT INTO cameras (sector, brand, stream_link, rtsp_url, connection_type, ip_address, username, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [sector, brand || 'hikvision', stream_link || '', rtsp_url || '', connection_type || 'ip', ip_address || '', username || '', password || '']
         );
         res.json({ status: "Cámara registrada correctamente" });
     } catch (err) {

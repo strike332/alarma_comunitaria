@@ -48,6 +48,9 @@ export default function AdminPanel() {
   const [camStreamLink, setCamStreamLink] = useState('');
   const [camConnectionType, setCamConnectionType] = useState('ip');
   const [camRtspUrl, setCamRtspUrl] = useState('');
+  const [camIp, setCamIp] = useState('');
+  const [camUser, setCamUser] = useState('admin');
+  const [camPass, setCamPass] = useState('');
 
   const fetchHardware = async () => {
     try { const res = await axios.get(`${API_BASE}/api/admin/hardware`, authHeader); setHardwareList(res.data); } catch(err) { console.error(err); }
@@ -181,9 +184,10 @@ export default function AdminPanel() {
     try {
       await axios.post(`${API_BASE}/api/admin/cameras`, { 
         sector: camSector, brand: camBrand, stream_link: camStreamLink,
-        connection_type: camConnectionType, rtsp_url: camRtspUrl
+        connection_type: camConnectionType, rtsp_url: camRtspUrl,
+        ip_address: camIp, username: camUser, password: camPass
       }, authHeader);
-      setCamStreamLink(''); setCamRtspUrl('');
+      setCamStreamLink(''); setCamRtspUrl(''); setCamIp(''); setCamPass('');
       fetchCameras();
       showAlert("¡Cámara registrada con éxito!");
     } catch (err) { showAlert("Error: " + (err.response?.data?.error || "Error de red")); }
@@ -610,10 +614,21 @@ export default function AdminPanel() {
                   </div>
                 )}
 
-                {(camConnectionType === 'ip' || camConnectionType === 'p2p') && (
-                  <div style={{ padding: '1rem', background: '#262626', borderRadius: '0.5rem', border: '1px dashed #444' }}>
-                    <p style={{ color: 'gray', marginTop: 0, fontSize: '0.9rem' }}>Pega el enlace de compartir público generado desde la app móvil (DMSS / Imou / EZVIZ).</p>
-                    <input type="url" placeholder={camConnectionType === 'p2p' ? "Requerido para P2P" : "Ej: https://imoulife.com/share/..."} value={camStreamLink} onChange={e => setCamStreamLink(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #444', background: '#171717', color: 'white' }} required={camConnectionType === 'p2p'} />
+                {camConnectionType === 'p2p' && (
+                  <div style={{ padding: '1rem', background: '#262626', borderRadius: '0.5rem', border: '1px dashed #3b82f6' }}>
+                    <p style={{ color: '#60a5fa', marginTop: 0, fontSize: '0.9rem' }}>Pega el enlace de compartir desde DMSS</p>
+                    <input type="url" required placeholder="https://dmss..." value={camStreamLink} onChange={e => setCamStreamLink(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #444', background: '#171717', color: 'white' }} />
+                  </div>
+                )}
+
+                {camConnectionType === 'ip' && (
+                  <div style={{ padding: '1rem', background: '#262626', borderRadius: '0.5rem', border: '1px dashed #4ade80' }}>
+                    <p style={{ color: '#4ade80', marginTop: 0, fontSize: '0.9rem' }}>Datos de conexión IP directa (HTTP/ISAPI)</p>
+                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                      <input type="text" required placeholder="IP: 192.168.x.x" value={camIp} onChange={e => setCamIp(e.target.value)} style={{ flex: 1, minWidth: '150px', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #444', background: '#171717', color: 'white', fontFamily: 'monospace' }} />
+                      <input type="text" required placeholder="Usuario" value={camUser} onChange={e => setCamUser(e.target.value)} style={{ flex: 1, minWidth: '120px', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #444', background: '#171717', color: 'white' }} />
+                      <input type="password" required placeholder="Contraseña" value={camPass} onChange={e => setCamPass(e.target.value)} style={{ flex: 1, minWidth: '120px', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #444', background: '#171717', color: 'white' }} />
+                    </div>
                   </div>
                 )}
 
