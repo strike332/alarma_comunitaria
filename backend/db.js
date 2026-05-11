@@ -191,12 +191,12 @@ async function verifyHardware(macAddress) {
 }
 
 async function getCameraBySector(sector) {
-    return await db.get(`SELECT ip_address, username, password, brand, connection_type, p2p_id, p2p_channel, stream_link FROM cameras WHERE sector = ?`, [sector]);
+    return await db.get(`SELECT ip_address, username, password, brand, connection_type, p2p_id, p2p_channel, stream_link, rtsp_url FROM cameras WHERE sector = ?`, [sector]);
 }
 
 // Nueva: devuelve TODAS las cámaras de un sector para navegación entre cámaras
 async function getCamerasBySector(sector) {
-    return await db.all(`SELECT id, ip_address, username, password, brand, connection_type, p2p_id, p2p_channel, stream_link FROM cameras WHERE sector = ? ORDER BY id ASC`, [sector]);
+    return await db.all(`SELECT id, ip_address, username, password, brand, connection_type, p2p_id, p2p_channel, stream_link, rtsp_url FROM cameras WHERE sector = ? ORDER BY id ASC`, [sector]);
 }
 
 // Nueva: devuelve TODAS las cámaras del sistema (para Admin Panel)
