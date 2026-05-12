@@ -861,6 +861,22 @@ export default function AdminPanel() {
               {status === 'cargando' && (
                 <p style={{ color: 'gray', marginTop: '1rem' }}>Iniciando cliente de WhatsApp... (Esto puede demorar unos segundos)</p>
               )}
+              <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                <button onClick={async () => {
+                  try { await axios.post(`${API_BASE}/api/admin/whatsapp/restart`, {}, authHeader); showAlert('WhatsApp reiniciado'); } 
+                  catch { showAlert('Error al reiniciar'); }
+                }} style={{ padding: '0.75rem 1.5rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer' }}>
+                  🔄 Reiniciar Bot
+                </button>
+                <button onClick={() => {
+                  showConfirm('¿Borrar sesión de WhatsApp y generar nuevo QR?', async () => {
+                    try { await axios.post(`${API_BASE}/api/admin/whatsapp/reset`, {}, authHeader); showAlert('Sesión borrada. Escanea el nuevo QR.'); } 
+                    catch { showAlert('Error'); }
+                  });
+                }} style={{ padding: '0.75rem 1.5rem', background: 'var(--danger)', color: 'white', border: 'none', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer' }}>
+                  🗑️ Resetear QR
+                </button>
+              </div>
             </div>
           </div>
         )}

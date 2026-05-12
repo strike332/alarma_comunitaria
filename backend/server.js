@@ -316,71 +316,88 @@ let rfListenTimeout = null;
 const testModeUsers = new Set();
 
 // ============================================================
-// WHATSAPP CLIENT
+// WHATSAPP CLIENT (reinicializable)
 // ============================================================
-const whatsapp = new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: {
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--single-process',
-            '--user-data-dir=/tmp/puppeteer_chromium',
-        ],
-        headless: true,
-    }
-});
+let whatsapp = createWhatsAppClient();
 
-whatsapp.on('qr', (qr) => {
-    currentQR = qr;
-    whatsAppStatus = 'esperando_qr';
-    io.emit('whatsapp_qr', qr);
-    console.log('--- SCAN QR CODE (También disponible en el Panel Admin Web) ---');
-    qrcode.generate(qr, { small: true });
-});
-
-whatsapp.on('ready', () => {
-    currentQR = null;
-    whatsAppStatus = 'conectado';
-    io.emit('whatsapp_status', 'conectado');
-    console.log('WhatsApp Client is READY');
-});
-
-whatsapp.on('auth_failure', (msg) => {
-    console.error('❌ WhatsApp auth failure:', msg);
-    whatsAppStatus = 'auth_failure';
-    io.emit('whatsapp_status', 'auth_failure');
-});
-
-whatsapp.on('disconnected', (reason) => {
-    whatsAppStatus = 'desconectado';
-    currentQR = null;
-    io.emit('whatsapp_status', 'desconectado');
-    console.log('WhatsApp Client DISCONNECTED. Razón:', reason);
-    // Reconexión automática en 10 segundos
-    setTimeout(() => {
-        console.log('🔄 Reintentando conexión de WhatsApp...');
-        whatsAppStatus = 'cargando';
-        io.emit('whatsapp_status', 'cargando');
-        whatsapp.initialize().catch(e => console.error('Fallo reconexión WhatsApp:', e.message));
-    }, 10000);
-});
-
-whatsapp.on('message', async (msg) => {
-    if (msg.body.startsWith('!vincular') && msg.from.endsWith('@g.us')) {
-        const sectorName = msg.body.replace('!vincular', '').trim();
-        if (sectorName) {
-            await db.setSectorGroup(sectorName, msg.from);
-            msg.reply(`✅ Sistema enlazado. Las alertas del *${sectorName}* llegarán aquí.`);
-            console.log(`Grupo ${msg.from} vinculado al Sector: ${sectorName}`);
-        } else {
-            msg.reply(`❌ Debes especificar el sector. Ejemplo: !vincular Sector Norte`);
+function createWhatsAppClient() {
+    const client = new Client({
+        authStrategy: new LocalAuth(),
+        puppeteer: {
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--single-process',
+                '--user-data-dir=/tmp/puppeteer_chromium',
+            ],
+            headless: true,
         }
-    }
-});
+    });
 
-whatsapp.initialize();
+    client.on('qr', (qr) => {
+        currentQR = qr;
+        whatsAppStatus = 'esperando_qr';
+        io.emit('whatsapp_qr', qr);
+        console.log('--- SCAN QR CODE ---');
+        qrcode.generate(qr, { small: true });
+    });
+
+    client.on('ready', () => {
+        currentQR = null;
+        whatsAppStatus = 'conectado';
+        io.emit('whatsapp_status', 'conectado');
+        console.log('WhatsApp Client is READY');
+    });
+
+    client.on('auth_failure', (msg) => {
+        console.error('❌ WhatsApp auth failure:', msg);
+        whatsAppStatus = 'auth_failure';
+        io.emit('whatsapp_status', 'auth_failure');
+    });
+
+    client.on('disconnected', (reason) => {
+        whatsAppStatus = 'desconectado';
+        currentQR = null;
+        io.emit('whatsapp_status', 'desconectado');
+        console.log('WhatsApp Client DISCONNECTED. Razón:', reason);
+        setTimeout(() => {
+            if (whatsAppStatus === 'desconectado') {
+                console.log('🔄 Reintentando conexión de WhatsApp...');
+                whatsAppStatus = 'cargando';
+                io.emit('whatsapp_status', 'cargando');
+                client.initialize().catch(e => console.error('Fallo reconexión:', e.message));
+            }
+        }, 10000);
+    });
+
+    client.on('message', async (msg) => {
+        if (msg.body.startsWith('!vincular') && msg.from.endsWith('@g.us')) {
+            const sectorName = msg.body.replace('!vincular', '').trim();
+            if (sectorName) {
+                await db.setSectorGroup(sectorName, msg.from);
+                msg.reply(`✅ Sistema enlazado. Las alertas del *${sectorName}* llegarán aquí.`);
+                console.log(`Grupo ${msg.from} vinculado al Sector: ${sectorName}`);
+            } else {
+                msg.reply(`❌ Debes especificar el sector. Ejemplo: !vincular Sector Norte`);
+            }
+        }
+    });
+
+    client.initialize().catch(e => console.error('Fallo al inicializar WhatsApp:', e.message));
+    return client;
+}
+
+async function restartWhatsApp() {
+    try { await whatsapp.destroy(); } catch(e) {}
+    whatsAppStatus = 'cargando';
+    currentQR = null;
+    io.emit('whatsapp_status', 'cargando');
+    whatsapp = createWhatsAppClient();
+    console.log('🔄 WhatsApp reiniciado por el administrador');
+}
+
+// ============================================================
 
 io.on('connection', (socket) => {
     socket.emit('whatsapp_status', whatsAppStatus);
@@ -1100,6 +1117,30 @@ app.delete('/api/admin/sectors/:name', verifyAdmin, async (req, res) => {
     } catch {
         res.status(500).json({ error: "Error al eliminar sector" });
     }
+});
+
+// ============================================================
+// API ROUTES — ADMIN WHATSAPP CONTROL
+// ============================================================
+
+app.post('/api/admin/whatsapp/restart', verifyAdmin, async (req, res) => {
+    await restartWhatsApp();
+    res.json({ status: "WhatsApp reiniciado", whatsAppStatus });
+});
+
+app.post('/api/admin/whatsapp/reset', verifyAdmin, async (req, res) => {
+    // Borrar sesión guardada y reiniciar desde cero (nuevo QR)
+    try { await whatsapp.destroy(); } catch(e) {}
+    try {
+        const { execSync } = require('child_process');
+        execSync('rm -rf /app/backend/.wwebjs_auth/* 2>/dev/null || true');
+    } catch(e) {}
+    whatsAppStatus = 'esperando_qr';
+    currentQR = null;
+    io.emit('whatsapp_status', 'esperando_qr');
+    whatsapp = createWhatsAppClient();
+    console.log('🔄 WhatsApp reseteado completamente (sesión borrada)');
+    res.json({ status: "Sesión borrada. Escanea el nuevo QR.", whatsAppStatus });
 });
 
 // ============================================================
