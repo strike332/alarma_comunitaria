@@ -347,10 +347,24 @@ whatsapp.on('ready', () => {
     console.log('WhatsApp Client is READY');
 });
 
-whatsapp.on('disconnected', () => {
+whatsapp.on('auth_failure', (msg) => {
+    console.error('❌ WhatsApp auth failure:', msg);
+    whatsAppStatus = 'auth_failure';
+    io.emit('whatsapp_status', 'auth_failure');
+});
+
+whatsapp.on('disconnected', (reason) => {
     whatsAppStatus = 'desconectado';
+    currentQR = null;
     io.emit('whatsapp_status', 'desconectado');
-    console.log('WhatsApp Client DISCONNECTED');
+    console.log('WhatsApp Client DISCONNECTED. Razón:', reason);
+    // Reconexión automática en 10 segundos
+    setTimeout(() => {
+        console.log('🔄 Reintentando conexión de WhatsApp...');
+        whatsAppStatus = 'cargando';
+        io.emit('whatsapp_status', 'cargando');
+        whatsapp.initialize().catch(e => console.error('Fallo reconexión WhatsApp:', e.message));
+    }, 10000);
 });
 
 whatsapp.on('message', async (msg) => {
