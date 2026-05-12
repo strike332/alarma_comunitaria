@@ -3,8 +3,6 @@
 # Para desplegar en un Droplet de DigitalOcean
 # ============================================================
 
-version: '3.8'
-
 services:
   app:
     build:
@@ -25,6 +23,8 @@ services:
     volumes:
       - alarmas_data:/app/backend/.wwebjs_auth
       - alarmas_db:/data
+    shm_size: '256mb'
+    mem_limit: 1536m
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
       interval: 30s

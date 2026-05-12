@@ -5,10 +5,11 @@
 
 FROM node:20
 
-# Instalar Chromium para whatsapp-web.js + ffmpeg para RTSP
+# Instalar Chromium para whatsapp-web.js + ffmpeg para RTSP + dumb-init para señales
 RUN apt-get update && apt-get install -y \
     chromium \
     ffmpeg \
+    dumb-init \
     libnss3 \
     libnspr4 \
     libatk1.0-0 \
@@ -27,6 +28,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV CHROMIUM_FLAGS="--no-sandbox --disable-gpu --disable-dev-shm-usage"
 ENV NODE_ENV=production
 
 WORKDIR /app
@@ -39,12 +42,13 @@ RUN cd frontend && npm ci && cd .. && cd frontend && npx vite build && cd ..
 COPY backend/ ./backend/
 RUN cd backend && npm ci --build-from-source && cd ..
 
-# Crear directorios para volúmenes persistentes
-RUN mkdir -p /data
+# Crear directorios para volúmenes persistentes y shared memory
+RUN mkdir -p /data /tmp/wwebjs_auth
 
 # Exponer puerto
 EXPOSE 3001
 
-# Iniciar servidor
+# Usar dumb-init para manejar señales correctamente (evita zombies de Chromium)
 WORKDIR /app/backend
+ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "server.js"]

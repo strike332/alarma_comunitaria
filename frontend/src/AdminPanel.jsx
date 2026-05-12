@@ -842,7 +842,7 @@ export default function AdminPanel() {
           <div className="fade-in">
             <h1 style={{ marginTop: 0 }}>Estado de WhatsApp</h1>
             <div style={{ background: '#171717', padding: '2rem', borderRadius: '1rem', border: '1px solid #333', textAlign: 'center', maxWidth: '500px', margin: '0 auto' }}>
-              <h2 style={{ marginTop: 0, color: status === 'conectado' ? '#22c55e' : 'white' }}>Estado: {status.toUpperCase()}</h2>
+              <h2 style={{ marginTop: 0, color: status === 'conectado' ? '#22c55e' : status === 'reconectando' || status === 'cargando' ? '#f59e0b' : status === 'pausado_qr' || status === 'auth_failure' ? '#ef4444' : 'white' }}>Estado: {status.toUpperCase()}</h2>
               {status === 'esperando_qr' && qr && (
                 <div style={{ marginTop: '1.5rem' }}>
                   <p style={{ color: 'gray', marginBottom: '1rem' }}>Escanea este código con el WhatsApp del dispositivo bot</p>
@@ -859,7 +859,31 @@ export default function AdminPanel() {
                 </div>
               )}
               {status === 'cargando' && (
-                <p style={{ color: 'gray', marginTop: '1rem' }}>Iniciando cliente de WhatsApp... (Esto puede demorar unos segundos)</p>
+                <p style={{ color: '#f59e0b', marginTop: '1rem' }}>⏳ Iniciando cliente de WhatsApp... (Esto puede demorar hasta 60 segundos)</p>
+              )}
+              {status === 'reconectando' && (
+                <div style={{ marginTop: '1rem', color: '#f59e0b' }}>
+                  <p>🔄 Reconectando automáticamente...</p>
+                  <p style={{ color: 'gray', fontSize: '0.85rem' }}>El bot se desconectó y está intentando reconectarse con un nuevo cliente.</p>
+                </div>
+              )}
+              {status === 'pausado_qr' && (
+                <div style={{ marginTop: '1rem', color: '#ef4444' }}>
+                  <p>⚠️ Demasiados intentos de QR sin escanear</p>
+                  <p style={{ color: 'gray', fontSize: '0.85rem' }}>El bot se ha pausado. Presiona "Reiniciar Bot" cuando estés listo para escanear.</p>
+                </div>
+              )}
+              {status === 'auth_failure' && (
+                <div style={{ marginTop: '1rem', color: '#ef4444' }}>
+                  <p>❌ La sesión de WhatsApp está corrupta</p>
+                  <p style={{ color: 'gray', fontSize: '0.85rem' }}>Presiona "Resetear QR" para borrar la sesión y vincular de nuevo.</p>
+                </div>
+              )}
+              {status === 'desconectado' && (
+                <div style={{ marginTop: '1rem', color: 'gray' }}>
+                  <p>📴 El bot se ha desconectado.</p>
+                  <p style={{ fontSize: '0.85rem' }}>Intentando reconexión automática en unos segundos...</p>
+                </div>
               )}
               <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
                 <button onClick={async () => {
