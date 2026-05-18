@@ -37,6 +37,62 @@ String base64Encode(const String& input) {
   return out;
 }
 
+// MD5 simple (RFC 1321, sin dependencias)
+String md5(const String& input) {
+  // Inicializar buffers MD5
+  uint32_t h0 = 0x67452301, h1 = 0xEFCDAB89, h2 = 0x98BADCFE, h3 = 0x10325476;
+  const uint32_t k[64] = {
+    0xD76AA478,0xE8C7B756,0x242070DB,0xC1BDCEEE,0xF57C0FAF,0x4787C62A,0xA8304613,0xFD469501,
+    0x698098D8,0x8B44F7AF,0xFFFF5BB1,0x895CD7BE,0x6B901122,0xFD987193,0xA679438E,0x49B40821,
+    0xF61E2562,0xC040B340,0x265E5A51,0xE9B6C7AA,0xD62F105D,0x02441453,0xD8A1E681,0xE7D3FBC8,
+    0x21E1CDE6,0xC33707D6,0xF4D50D87,0x455A14ED,0xA9E3E905,0xFCEFA3F8,0x676F02D9,0x8D2A4C8A,
+    0xFFFA3942,0x8771F681,0x6D9D6122,0xFDE5380C,0xA4BEEA44,0x4BDECFA9,0xF6BB4B60,0xBEBFBC70,
+    0x289B7EC6,0xEAA127FA,0xD4EF3085,0x04881D05,0xD9D4D039,0xE6DB99E5,0x1FA27CF8,0xC4AC5665,
+    0xF4292244,0x432AFF97,0xAB9423A7,0xFC93A039,0x655B59C3,0x8F0CCC92,0xFFEFF47D,0x85845DD1,
+    0x6FA87E4F,0xFE2CE6E0,0xA3014314,0x4E0811A1,0xF7537E82,0xBD3AF235,0x2AD7D2BB,0xEB86D391
+  };
+  const uint8_t s[64] = {
+    7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,
+    4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21
+  };
+
+  // Padding
+  size_t origLen = input.length();
+  size_t paddedLen = ((origLen + 8) / 64 + 1) * 64;
+  uint8_t* msg = (uint8_t*)calloc(paddedLen, 1);
+  memcpy(msg, input.c_str(), origLen);
+  msg[origLen] = 0x80;
+  uint64_t bits = origLen * 8;
+  memcpy(msg + paddedLen - 8, &bits, 8);
+
+  for (size_t off = 0; off < paddedLen; off += 64) {
+    uint32_t* w = (uint32_t*)(msg + off);
+    uint32_t w2[64];
+    for (int i = 0; i < 16; i++) w2[i] = w[i];
+    for (int i = 16; i < 64; i++) {
+      w2[i] = w2[i-16] + (((w2[i-3] >> 17)|(w2[i-3] << 15)) ^ ((w2[i-3] >> 19)|(w2[i-3] << 13)) ^ (w2[i-3] >> 10)) + w2[i-7] + (((w2[i-15] >> 7)|(w2[i-15] << 25)) ^ ((w2[i-15] >> 18)|(w2[i-15] << 14)) ^ (w2[i-15] >> 3));
+    }
+    uint32_t a = h0, b = h1, c = h2, d = h3;
+    for (int i = 0; i < 64; i++) {
+      uint32_t f, g;
+      if (i < 16) { f = (b & c) | (~b & d); g = i; }
+      else if (i < 32) { f = (d & b) | (~d & c); g = (5*i + 1) % 16; }
+      else if (i < 48) { f = b ^ c ^ d; g = (3*i + 5) % 16; }
+      else { f = c ^ (b | ~d); g = (7*i) % 16; }
+      uint32_t tmp = d;
+      d = c; c = b;
+      b += ((a << s[i]) | (a >> (32 - s[i]))) + (w2[g] + k[i] + f);
+      a = tmp;
+    }
+    h0 += a; h1 += b; h2 += c; h3 += d;
+  }
+  free(msg);
+
+  char hex[33];
+  sprintf(hex, "%08x%08x%08x%08x", h0, h1, h2, h3);
+  return String(hex);
+}
+
 // --- MAPA DE HARDWARE DEFINITIVO (Documentado en PDF) ---
 const int PIN_ANTENA        = 4;   // D4 - Receptor RF 433 MHz (GDO0 del CC1101 va conectado AQUÍ, ya no en el 2)
 const int PIN_RELE_EXTERNO  = 26;  // Relé externo: LOW = activar, HIGH = desactivar firmemente
@@ -137,13 +193,53 @@ void capturarYSubirSnapshot() {
   WiFiClient client;
   HTTPClient httpCam, httpServer;
   
-  // Paso 1: Obtener JPEG de la cámara local
+  // Paso 1: Obtener JPEG de la cámara local (Digest Auth)
   String snapshotUrl = "http://" + camIP + "/onvifsnapshot/media_service/snapshot?channel=1&subtype=0";
-  httpCam.begin(client, snapshotUrl);
-  httpCam.setTimeout(3000);
-  httpCam.addHeader("Authorization", "Basic " + snapshotAuth);
   
+  // Intentar Digest Auth
+  httpCam.begin(client, snapshotUrl);
+  httpCam.setTimeout(2000);
   int camCode = httpCam.GET();
+  
+  // Si 401, hacer handshake Digest
+  if (camCode == 401) {
+    String authHeader = httpCam.header("WWW-Authenticate");
+    httpCam.end();
+    
+    if (authHeader.length() > 0) {
+      String nonce = "", realm = "", qop = "";
+      int p = authHeader.indexOf("nonce=\"");
+      if (p >= 0) { p += 7; int e = authHeader.indexOf("\"", p); nonce = authHeader.substring(p, e); }
+      p = authHeader.indexOf("realm=\"");
+      if (p >= 0) { p += 7; int e = authHeader.indexOf("\"", p); realm = authHeader.substring(p, e); }
+      p = authHeader.indexOf("qop=\"");
+      if (p >= 0) { p += 5; int e = authHeader.indexOf("\"", p); qop = authHeader.substring(p, e); }
+      
+      String nc = "00000001";
+      String cnonce = "abc123";
+      String ha1 = md5(camUser + ":" + realm + ":" + camPass);
+      String ha2 = md5("GET:/onvifsnapshot/media_service/snapshot?channel=1&subtype=0");
+      String response = md5(ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":" + qop + ":" + ha2);
+      
+      String digestAuth = "Digest username=\"" + camUser + "\", realm=\"" + realm + "\", nonce=\"" + nonce + 
+        "\", uri=\"/onvifsnapshot/media_service/snapshot?channel=1&subtype=0\", qop=" + qop + 
+        ", nc=" + nc + ", cnonce=\"" + cnonce + "\", response=\"" + response + "\"";
+      
+      httpCam.begin(client, snapshotUrl);
+      httpCam.setTimeout(2000);
+      httpCam.addHeader("Authorization", digestAuth);
+      camCode = httpCam.GET();
+    }
+  }
+  
+  // Si Digest falló, intentar Basic
+  if (camCode == 401) {
+    httpCam.end();
+    httpCam.begin(client, snapshotUrl);
+    httpCam.setTimeout(2000);
+    httpCam.addHeader("Authorization", "Basic " + snapshotAuth);
+    camCode = httpCam.GET();
+  }
   
   Serial.print("📷 Cámara HTTP ");
   Serial.print(camCode);
