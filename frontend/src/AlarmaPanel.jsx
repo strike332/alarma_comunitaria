@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
-import { Siren, Stethoscope, Users, ShieldAlert, Settings, Moon, Sun, ArrowLeft, LogOut, Radio, Trash2, CreditCard, Ticket, Clock, Flame, Video } from 'lucide-react';
+import { Siren, Stethoscope, Users, ShieldAlert, Settings, Moon, Sun, ArrowLeft, LogOut, Radio, Trash2, CreditCard, Ticket, Clock, Flame, Video, Camera } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { initPushNotifications } from './PushService';
 import { initWidgetService, showPersistentWidget, addWidgetListener } from './WidgetService';
@@ -20,6 +20,7 @@ export default function AlarmaPanel() {
   const [promoMessage, setPromoMessage] = useState(null);
   const [pendingTriggerType, setPendingTriggerType] = useState(null);
   const [isExpired, setIsExpired] = useState(false);
+  const [showCameraTest, setShowCameraTest] = useState(false);
   const navigate = useNavigate();
   
   const isAdmin = localStorage.getItem('alarma_role') === 'admin';
@@ -420,6 +421,10 @@ export default function AlarmaPanel() {
         </button>
       </main>
 
+      <button onClick={() => setShowCameraTest(true)} style={{ width: '100%', maxWidth: '500px', padding: '0.75rem', background: '#262626', color: '#fbbf24', border: '1px solid #f59e0b', borderRadius: '0.75rem', fontWeight: 'bold', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+        <Camera size={20} /> Probar Cámaras (sin disparar alarma)
+      </button>
+
       <footer className="footer">
         Protección Vecinal - Pulse prolongado para ayuda
       </footer>
@@ -442,6 +447,8 @@ export default function AlarmaPanel() {
             onCancel={() => setPendingTriggerType(null)} 
         />
       )}
+
+      {showCameraTest && <CameraTestModal onClose={() => setShowCameraTest(false)} />}
     </div>
   );
 }
@@ -467,6 +474,61 @@ function ConfirmWidgetOverlay({ type, onConfirm, onCancel }) {
             </div>
         </div>
     );
+}
+
+// Modal para probar cámaras sin disparar alarmas
+function CameraTestModal({ onClose }) {
+  const [imageSrc, setImageSrc] = useState('');
+  const [cameras, setCameras] = useState([]);
+  const [camIndex, setCamIndex] = useState(0);
+  const intervalRef = React.useRef(null);
+  const sector = localStorage.getItem('alarma_sector') || 'Santa Ines';
+  const token = localStorage.getItem('alarma_token');
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/cameras/${encodeURIComponent(sector)}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    }).then(r => r.json()).then(d => setCameras(Array.isArray(d) && d.length > 0 ? d : [{ id: null }])).catch(() => setCameras([{ id: null }]));
+  }, [sector, token]);
+
+  useEffect(() => {
+    if (cameras.length === 0) return;
+    const act = cameras[camIndex];
+    const load = () => {
+      const url = act?.id
+        ? `${API_BASE}/api/emergency-view/${encodeURIComponent(sector)}/${act.id}?token=${token}`
+        : `${API_BASE}/api/emergency-view/${encodeURIComponent(sector)}?token=${token}`;
+      const img = new Image();
+      img.onload = () => setImageSrc(img.src);
+      img.src = `${url}&tz=${Date.now()}`;
+    };
+    load();
+    intervalRef.current = setInterval(load, 2000);
+    return () => clearInterval(intervalRef.current);
+  }, [cameras, camIndex, sector, token]);
+
+  return (
+    <div className="alert-overlay" style={{ background: 'rgba(0,0,0,0.95)', overflowY: 'auto', padding: '2rem 1rem' }}>
+      <h2 style={{ color: '#fbbf24', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <Camera size={28} /> Prueba de Cámaras
+      </h2>
+      <p style={{ color: 'gray', marginBottom: '1.5rem', textAlign: 'center' }}>Sin disparar alarmas. Solo tú ves esto.</p>
+      <div style={{ width: '100%', maxWidth: '600px', background: 'black', borderRadius: '0.75rem', overflow: 'hidden', border: '2px solid #f59e0b', position: 'relative', minHeight: '280px', aspectRatio: '16/9' }}>
+        <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10, background: '#f59e0b', color: 'black', padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.8rem' }}>TEST</div>
+        {cameras.length > 1 && (
+          <div style={{ position: 'absolute', top: '10px', right: '10px', zIndex: 10, background: 'rgba(0,0,0,0.7)', color: 'white', padding: '2px 10px', borderRadius: '4px', fontSize: '0.85rem' }}>📷 {camIndex + 1} / {cameras.length}</div>
+        )}
+        {imageSrc ? <img src={imageSrc} alt="Test cámara" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', background: 'black' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>Conectando con cámara...</div>}
+        {cameras.length > 1 && (
+          <>
+            <button onClick={() => setCamIndex(i => (i - 1 + cameras.length) % cameras.length)} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none', borderRadius: '50%', width: '40px', height: '40px', fontSize: '1.4rem', cursor: 'pointer', zIndex: 10 }}>‹</button>
+            <button onClick={() => setCamIndex(i => (i + 1) % cameras.length)} style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none', borderRadius: '50%', width: '40px', height: '40px', fontSize: '1.4rem', cursor: 'pointer', zIndex: 10 }}>›</button>
+          </>
+        )}
+      </div>
+      <button onClick={onClose} style={{ marginTop: '1.5rem', padding: '1rem 3rem', background: '#262626', color: 'white', border: '1px solid #444', borderRadius: '0.75rem', fontWeight: 'bold', fontSize: '1.1rem', cursor: 'pointer' }}>CERRAR</button>
+    </div>
+  );
 }
 
 function PaywallOverlay({ onRedeem, onPay }) {
