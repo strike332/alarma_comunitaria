@@ -623,13 +623,15 @@ function AlertOverlay({ alert, onClose }) {
       {/* Visor de cámaras */}
       <div style={{
         width: '100%', 
-        maxWidth: '600px', 
+        maxWidth: '600px',
         background: 'black',
         borderRadius: '0.75rem',
         overflow: 'hidden',
         marginBottom: '1.5rem',
         border: '2px solid red',
-        position: 'relative'
+        position: 'relative',
+        minHeight: '280px',
+        aspectRatio: '16/9',
       }}>
         <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10, background: 'red', color: 'white', padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.8rem', animation: 'blink 1s infinite' }}>
           {streamUrl ? 'EN VIVO' : 'REC VIVO'}

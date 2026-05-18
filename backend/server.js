@@ -1056,17 +1056,7 @@ app.post('/api/alarm', alarmLimiter, async (req, res) => {
         if (type === 'Prueba Silenciosa') {
             message = `ℹ️ *PRUEBA DE SISTEMA EXITOSA* ℹ️\nSistema en *${neighbor.sector}* monitoreando correctamente.`;
         } else {
-            const alertToken = jwt.sign(
-                { id: neighbor.id, role: 'user', sector: neighbor.sector, name: neighbor.name },
-                _JWT_SECRET,
-                { expiresIn: '1h' }
-            );
-            const emergencyLink = `${publicUrl}/emergencia?sector=${encodeURIComponent(neighbor.sector)}&token=${alertToken}`;
-
-            const cam = await db.getCameraBySector(neighbor.sector);
-            const streamLink = (cam && cam.stream_link) ? cam.stream_link : emergencyLink;
-
-            message += `🎥 *Ver transmisión en vivo:* \n${streamLink}\n━━━━━━━━━━━━━━\nFavor de verificar y dar aviso a las autoridades.`;
+            message += `Favor de verificar y dar aviso a las autoridades.`;
         }
 
         const chatId = await db.getSectorGroup(neighbor.sector);
@@ -1122,31 +1112,16 @@ app.post('/api/alarm', alarmLimiter, async (req, res) => {
 
 app.post('/api/silenciar', verifyUser, async (req, res) => {
     console.log(`Boton del Pánico Silenciado vía Web por: ${req.user.name}`);
-
     io.emit('silence_alarm');
 
-    let silenced = false;
+    // Encolar comando de silencio para TODOS los ESP32s registrados
+    let count = 0;
     for (const mac in espDevices) {
-        const espIP = espDevices[mac].ip;
-        try {
-            console.log(`>> Silenciando ESP32 [${mac}] en http://${espIP}/silenciar...`);
-            await axios.get(`http://${espIP}/silenciar`, { timeout: 4000 });
-            console.log(`<< ESP32 [${mac}] silenciado`);
-            silenced = true;
-        } catch (err) {
-            console.log(`HTTP directo falló para [${mac}], encolando...`);
-            pendingCommands[mac] = { action: 'silenciar', timestamp: Date.now() };
-            silenced = true;
-        }
+        pendingCommands[mac] = { action: 'silenciar', timestamp: Date.now() };
+        count++;
     }
 
-    if (!silenced && activeAlarmIP) {
-        try {
-            await axios.get(`http://${activeAlarmIP}/silenciar`, { timeout: 4000 });
-        } catch {}
-    }
-
-    res.json({ status: "Alerta Cancelada Exitosamente" });
+    res.json({ status: `Silencio enviado a ${count} dispositivo(s)` });
 });
 
 // ============================================================

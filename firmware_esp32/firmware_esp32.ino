@@ -60,7 +60,7 @@ unsigned long lastWifiCheckTime = 0;
 const unsigned long WIFI_CHECK_INTERVAL = 500; // Revisar cada 500ms
 
 // === CAMARA LOCAL (Snapshots via HTTP) ===
-String camIP = "192.168.1.64";      // IP de la cámara local
+String camIP = "192.168.100.131";   // IP de la cámara Dahua
 String camUser = "admin";           // Usuario cámara
 String camPass = "admin1234";       // Contraseña cámara
 unsigned long lastSnapshotTime = 0;
