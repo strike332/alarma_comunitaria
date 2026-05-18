@@ -145,6 +145,11 @@ void capturarYSubirSnapshot() {
   
   int camCode = httpCam.GET();
   
+  Serial.print("📷 Cámara HTTP ");
+  Serial.print(camCode);
+  Serial.print(" | len=");
+  Serial.println(camCode == 200 ? httpCam.getSize() : 0);
+  
   if (camCode == 200) {
     int len = httpCam.getSize();
     if (len > 100 && len < 200000) {
@@ -156,11 +161,10 @@ void capturarYSubirSnapshot() {
         
         httpServer.begin(uploadUrl);
         httpServer.addHeader("Content-Type", "image/jpeg");
+        httpServer.setTimeout(2000);
         int uploadCode = httpServer.POST(jpeg, len);
-        
-        if (uploadCode == 200) {
-          // Snapshot subido exitosamente
-        }
+        Serial.print("📤 Upload snapshot: ");
+        Serial.println(uploadCode);
         httpServer.end();
         free(jpeg);
       }
