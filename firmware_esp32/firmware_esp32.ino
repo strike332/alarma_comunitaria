@@ -204,6 +204,8 @@ void capturarYSubirSnapshot() {
   // Si 401, hacer handshake Digest
   if (camCode == 401) {
     String authHeader = httpCam.header("WWW-Authenticate");
+    Serial.print("📋 WWW-Auth: ");
+    Serial.println(authHeader.substring(0, 120));
     httpCam.end();
     
     if (authHeader.length() > 0) {
@@ -215,15 +217,25 @@ void capturarYSubirSnapshot() {
       p = authHeader.indexOf("qop=\"");
       if (p >= 0) { p += 5; int e = authHeader.indexOf("\"", p); qop = authHeader.substring(p, e); }
       
+      Serial.print("  realm="); Serial.println(realm);
+      Serial.print("  nonce="); Serial.println(nonce.substring(0,40));
+      Serial.print("  qop="); Serial.println(qop);
+      
       String nc = "00000001";
       String cnonce = "abc123";
       String ha1 = md5(camUser + ":" + realm + ":" + camPass);
       String ha2 = md5("GET:/onvifsnapshot/media_service/snapshot?channel=1&subtype=0");
       String response = md5(ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":" + qop + ":" + ha2);
       
+      Serial.print("  ha1="); Serial.println(ha1);
+      Serial.print("  response="); Serial.println(response);
+      
       String digestAuth = "Digest username=\"" + camUser + "\", realm=\"" + realm + "\", nonce=\"" + nonce + 
         "\", uri=\"/onvifsnapshot/media_service/snapshot?channel=1&subtype=0\", qop=" + qop + 
         ", nc=" + nc + ", cnonce=\"" + cnonce + "\", response=\"" + response + "\"";
+      
+      Serial.print("  Digest header: ");
+      Serial.println(digestAuth.substring(0,100));
       
       httpCam.begin(client, snapshotUrl);
       httpCam.setTimeout(2000);
