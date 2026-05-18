@@ -21,6 +21,7 @@
 #include <ELECHOUSE_CC1101_SRC_DRV.h> // Librería Driver ESP32 para CC1101
 #include <RCSwitch.h>
 #include <WebServer.h>
+#include <mbedtls/base64.h>
 
 // --- MAPA DE HARDWARE DEFINITIVO (Documentado en PDF) ---
 const int PIN_ANTENA        = 4;   // D4 - Receptor RF 433 MHz (GDO0 del CC1101 va conectado AQUÍ, ya no en el 2)
@@ -498,7 +499,14 @@ void setup() {
   registerUrl = "http://" + backendIP + ":3001/api/esp/register";
 
   // Codificar Basic Auth para snapshot de cámara
-  snapshotAuth = base64::encode(camUser + ":" + camPass);
+  {
+    String authStr = camUser + ":" + camPass;
+    size_t outLen;
+    unsigned char b64[256];
+    mbedtls_base64_encode(b64, sizeof(b64), &outLen, (const unsigned char*)authStr.c_str(), authStr.length());
+    b64[outLen] = 0;
+    snapshotAuth = String((char*)b64);
+  }
 
   // ¡Conectado con éxito! -> Luz Azul Fija (per documentación)
   digitalWrite(PIN_LED_AZUL, HIGH);
