@@ -25,6 +25,7 @@ export default function AdminPanel() {
   const [plansList, setPlansList] = useState([]);
   const [sniffLog, setSniffLog] = useState([]);
   const [alarmLogs, setAlarmLogs] = useState([]);
+  const [showCamTest, setShowCamTest] = useState(false);
   
   const [userSearch, setUserSearch] = useState('');
 
@@ -588,6 +589,10 @@ export default function AdminPanel() {
           <div className="fade-in">
             <h1 style={{ marginTop: 0 }}>Cámaras de Seguridad</h1>
             
+            <button onClick={() => setShowCamTest(true)} style={{ marginBottom: '1rem', padding: '0.75rem 1.5rem', background: '#f59e0b', color: '#0a0a0a', border: 'none', borderRadius: '0.5rem', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Camera size={18} /> Probar Cámaras (sin disparar alarma)
+            </button>
+            
             <div style={{ background: '#171717', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #333', marginBottom: '2rem' }}>
               <h3>Añadir Nueva Cámara</h3>
               <form onSubmit={handleAddCamera} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -907,6 +912,15 @@ export default function AdminPanel() {
         )}
 
       </main>
+
+      {showCamTest && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 2000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
+          <h2 style={{ color: '#fbbf24', marginBottom: '1rem' }}>📷 Prueba de Cámaras</h2>
+          <p style={{ color: 'gray', marginBottom: '1.5rem' }}>Sin disparar alarmas. Solo tú ves esto.</p>
+          <CamFeed sector={sectorsList[0]?.name || 'Santa Ines'} token={token} />
+          <button onClick={() => setShowCamTest(false)} style={{ marginTop: '1.5rem', padding: '1rem 3rem', background: '#262626', color: 'white', border: '1px solid #444', borderRadius: '0.75rem', fontWeight: 'bold', cursor: 'pointer' }}>CERRAR</button>
+        </div>
+      )}
       
       <style>{`
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
@@ -923,6 +937,28 @@ export default function AdminPanel() {
           .sidebar-overlay { display: block; }
         }
       `}</style>
+    </div>
+  );
+}
+
+function CamFeed({ sector, token }) {
+  const [img, setImg] = useState('');
+  const ref = React.useRef(null);
+  useEffect(() => {
+    const load = () => {
+      const url = `${API_BASE}/api/emergency-view/${encodeURIComponent(sector)}?token=${token}&tz=${Date.now()}`;
+      const i = new Image();
+      i.onload = () => setImg(i.src);
+      i.src = url;
+    };
+    load();
+    ref.current = setInterval(load, 2000);
+    return () => clearInterval(ref.current);
+  }, [sector, token]);
+  return (
+    <div style={{ width: '100%', maxWidth: '600px', background: 'black', borderRadius: '0.75rem', overflow: 'hidden', border: '2px solid #f59e0b', minHeight: '280px', aspectRatio: '16/9' }}>
+      <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10, background: '#f59e0b', color: 'black', padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.8rem' }}>TEST</div>
+      {img ? <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} /> : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>Conectando con cámara...</div>}
     </div>
   );
 }
