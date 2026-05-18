@@ -58,6 +58,14 @@ const unsigned long SYNC_INTERVAL_MS = 300000; // Sincronizar cada 5 minutos
 unsigned long lastWifiCheckTime = 0;
 const unsigned long WIFI_CHECK_INTERVAL = 500; // Revisar cada 500ms
 
+// === CAMARA LOCAL (Snapshots via HTTP) ===
+String camIP = "192.168.1.64";      // IP de la cámara local
+String camUser = "admin";           // Usuario cámara
+String camPass = "admin1234";       // Contraseña cámara
+unsigned long lastSnapshotTime = 0;
+const unsigned long SNAPSHOT_INTERVAL_MS = 2000; // Subir snapshot cada 2 segundos
+String snapshotAuth; // Basic auth codificado en setup()
+
 // === COMMAND LONG POLLING (Respuesta instantánea desde la nube) ===
 bool pollingActive = false;
 unsigned long lastPollCheck = 0;
@@ -100,6 +108,50 @@ void consultarComandosPendientes() {
   }
   http.end();
   pollingActive = false;
+}
+
+// ============================================================
+// FUNCIÓN: Capturar snapshot de cámara local y subirlo al droplet
+// ============================================================
+void capturarYSubirSnapshot() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  if (camIP.length() < 7) return; // Sin cámara configurada
+  if (millis() - lastSnapshotTime < SNAPSHOT_INTERVAL_MS) return;
+  lastSnapshotTime = millis();
+
+  WiFiClient client;
+  HTTPClient httpCam, httpServer;
+  
+  // Paso 1: Obtener JPEG de la cámara local
+  String snapshotUrl = "http://" + camIP + "/cgi-bin/snapshot.cgi?channel=1";
+  httpCam.begin(client, snapshotUrl);
+  httpCam.setTimeout(3000);
+  httpCam.addHeader("Authorization", "Basic " + snapshotAuth);
+  
+  int camCode = httpCam.GET();
+  
+  if (camCode == 200) {
+    int len = httpCam.getSize();
+    if (len > 100 && len < 200000) {
+      uint8_t* jpeg = (uint8_t*)malloc(len);
+      if (jpeg && httpCam.getStreamPtr()->readBytes(jpeg, len) == len) {
+        // Paso 2: Subir al droplet
+        String mac = WiFi.macAddress();
+        String uploadUrl = "http://" + backendIP + ":3001/api/esp/snapshot?mac=" + mac;
+        
+        httpServer.begin(uploadUrl);
+        httpServer.addHeader("Content-Type", "image/jpeg");
+        int uploadCode = httpServer.POST(jpeg, len);
+        
+        if (uploadCode == 200) {
+          // Snapshot subido exitosamente
+        }
+        httpServer.end();
+        free(jpeg);
+      }
+    }
+  }
+  httpCam.end();
 }
 
 WebServer server(80);
@@ -445,6 +497,9 @@ void setup() {
   serverUrl = "http://" + backendIP + ":3001/api/alarm";
   registerUrl = "http://" + backendIP + ":3001/api/esp/register";
 
+  // Codificar Basic Auth para snapshot de cámara
+  snapshotAuth = base64::encode(camUser + ":" + camPass);
+
   // ¡Conectado con éxito! -> Luz Azul Fija (per documentación)
   digitalWrite(PIN_LED_AZUL, HIGH);
 
@@ -494,6 +549,9 @@ void loop() {
   if (WiFi.status() == WL_CONNECTED && !pollingActive) {
     consultarComandosPendientes();
   }
+
+  // Subir snapshots de cámara local al droplet (cada 2 segundos)
+  capturarYSubirSnapshot();
 
   // Capa de Auto-Silencio (Seguro Vecinal 3 Minutos)
   if (isAlarmActive && (millis() - alarmStartTime > ALARM_TIMEOUT_MS)) {

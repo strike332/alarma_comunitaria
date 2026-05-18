@@ -309,6 +309,7 @@ let activeAlarmIP = null;
 let activeAlarmsBySector = {};
 let lastAlerts = {};
 let pendingCommands = {}; // { macAddress: { action, timestamp } } — cola para ESP32 remotos
+let espSnapshots = {}; // { macAddress: { buffer, timestamp } } — último snapshot subido por ESP32
 let currentQR = null;
 let whatsAppStatus = 'cargando';
 let rfListeningFor = null;
@@ -658,6 +659,16 @@ app.get('/api/emergency-view/:sector', verifyUser, verifySubscription, async (re
             return res.status(404).json({ error: "No hay cámara asignada a este sector" });
         }
 
+        if (cam.connection_type === 'p2p_local') {
+            const espmac = Object.keys(espDevices).find(m => espDevices[m].sector === sector);
+            if (espmac && espSnapshots[espmac] && (Date.now() - espSnapshots[espmac].timestamp < 10000)) {
+                res.setHeader('Content-Type', 'image/jpeg');
+                res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+                return res.end(espSnapshots[espmac].buffer);
+            }
+            return res.status(502).json({ error: "Snapshot no disponible. Esperando al ESP32..." });
+        }
+
         if (cam.connection_type === 'p2p') {
             return res.status(501).json({ error: "Visualización P2P en desarrollo." });
         }
@@ -727,6 +738,16 @@ app.get('/api/emergency-view/:sector/:cameraId', verifyUser, verifySubscription,
 
         if (!cam) {
             return res.status(404).json({ error: "Cámara no encontrada" });
+        }
+
+        if (cam.connection_type === 'p2p_local') {
+            const espmac = Object.keys(espDevices).find(m => espDevices[m].sector === sector);
+            if (espmac && espSnapshots[espmac] && (Date.now() - espSnapshots[espmac].timestamp < 10000)) {
+                res.setHeader('Content-Type', 'image/jpeg');
+                res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+                return res.end(espSnapshots[espmac].buffer);
+            }
+            return res.status(502).json({ error: "Snapshot no disponible. Esperando al ESP32..." });
         }
 
         if (cam.connection_type === 'p2p') {
@@ -823,6 +844,46 @@ app.post('/api/esp/register', async (req, res) => {
     console.log(`   Dispositivos en caché: ${Object.keys(espDevices).length}`);
 
     res.json({ status: "Registrado", sector });
+});
+
+app.post('/api/esp/register', async (req, res) => {
+    const { macAddress, ip } = req.body;
+    if (!macAddress || !ip) return res.status(400).json({ error: "macAddress e ip son requeridos" });
+
+    const hwRow = await db.verifyHardware(macAddress);
+    const sector = hwRow ? hwRow.sector : 'desconocido';
+
+    espDevices[macAddress] = { ip, sector, lastSeen: Date.now() };
+    activeAlarmIP = ip;
+
+    console.log(`📡 [ESP REGISTRADO] MAC: ${macAddress} | IP: ${ip} | Sector: ${sector}`);
+    console.log(`   Dispositivos en caché: ${Object.keys(espDevices).length}`);
+
+    res.json({ status: "Registrado", sector });
+});
+
+// ESP32 sube snapshots de cámara local al droplet
+app.post('/api/esp/snapshot', async (req, res) => {
+    const mac = (req.query.mac || '').toUpperCase();
+    if (!mac) return res.status(400).json({ error: "MAC requerida" });
+
+    const hwRow = await db.verifyHardware(mac);
+    if (!hwRow) return res.status(403).json({ error: "MAC no registrada" });
+
+    const chunks = [];
+    req.on('data', chunk => chunks.push(chunk));
+    req.on('end', () => {
+        const buffer = Buffer.concat(chunks);
+        if (buffer.length > 100) {
+            espSnapshots[mac] = { buffer, timestamp: Date.now() };
+            if (espDevices[mac]) {
+                espDevices[mac].lastSeen = Date.now();
+            } else {
+                espDevices[mac] = { ip: null, sector: hwRow.sector, lastSeen: Date.now() };
+            }
+        }
+        res.sendStatus(200);
+    });
 });
 
 // ============================================================

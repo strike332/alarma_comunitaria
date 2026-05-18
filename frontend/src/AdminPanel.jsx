@@ -603,6 +603,7 @@ export default function AdminPanel() {
                   <select value={camConnectionType} onChange={e => setCamConnectionType(e.target.value)} style={{ flex: 1, minWidth: '130px', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #444', background: '#262626', color: 'white' }}>
                     <option value="ip">IP Directa (HTTP/ISAPI)</option>
                     <option value="rtsp">RTSP Stream</option>
+                    <option value="p2p_local">P2P Local (ESP32)</option>
                     <option value="p2p">P2P (Nube)</option>
                   </select>
                 </div>
