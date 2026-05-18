@@ -138,7 +138,7 @@ void capturarYSubirSnapshot() {
   HTTPClient httpCam, httpServer;
   
   // Paso 1: Obtener JPEG de la cámara local
-  String snapshotUrl = "http://" + camIP + "/cgi-bin/snapshot.cgi?channel=1";
+  String snapshotUrl = "http://" + camIP + "/onvifsnapshot/media_service/snapshot?channel=1&subtype=0";
   httpCam.begin(client, snapshotUrl);
   httpCam.setTimeout(3000);
   httpCam.addHeader("Authorization", "Basic " + snapshotAuth);
