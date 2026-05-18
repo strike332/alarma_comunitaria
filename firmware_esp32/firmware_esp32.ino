@@ -22,6 +22,21 @@
 #include <RCSwitch.h>
 #include <WebServer.h>
 
+// Base64 manual (sin dependencias externas)
+String base64Encode(const String& input) {
+  const char* b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  String out;
+  int val = 0, bits = -6;
+  for (unsigned int i = 0; i < input.length(); i++) {
+    val = (val << 8) + input[i];
+    bits += 8;
+    while (bits >= 0) { out += b64chars[(val >> bits) & 0x3F]; bits -= 6; }
+  }
+  if (bits > -6) out += b64chars[((val << 8) >> (bits + 8)) & 0x3F];
+  while (out.length() % 4) out += '=';
+  return out;
+}
+
 // --- MAPA DE HARDWARE DEFINITIVO (Documentado en PDF) ---
 const int PIN_ANTENA        = 4;   // D4 - Receptor RF 433 MHz (GDO0 del CC1101 va conectado AQUÍ, ya no en el 2)
 const int PIN_RELE_EXTERNO  = 26;  // Relé externo: LOW = activar, HIGH = desactivar firmemente
@@ -499,14 +514,7 @@ void setup() {
 
   // Codificar Basic Auth para snapshot de cámara
   // Codificar Basic Auth para snapshot de cámara
-  {
-    String authStr = camUser + ":" + camPass;
-    size_t outLen;
-    unsigned char b64[256];
-    mbedtls_base64_encode(b64, sizeof(b64), &outLen, (const unsigned char*)authStr.c_str(), authStr.length());
-    b64[outLen] = 0;
-    snapshotAuth = String((char*)b64);
-  }
+  snapshotAuth = base64Encode(camUser + ":" + camPass);
 
   // ¡Conectado con éxito! -> Luz Azul Fija (per documentación)
   digitalWrite(PIN_LED_AZUL, HIGH);
