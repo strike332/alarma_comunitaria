@@ -337,46 +337,27 @@ function createWhatsAppClient() {
 
     const client = new Client({
         authStrategy: new LocalAuth(),
-        puppeteer: {
-            executablePath: chromePath,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--disable-extensions',
-                '--disable-software-rasterizer',
-                '--no-first-run',
-                '--no-zygote',
-            ],
-            headless: true,
-            timeout: 60000,
-        },
-        // Timeout interno de whatsapp-web.js para esperar que WA cargue
-        authTimeoutMs: 60000,
-        qrMaxRetries: WA_MAX_QR_ATTEMPTS,
-    });
-
-    client.on('loading_screen', (percent, message) => {
-        console.log(`📲 WhatsApp cargando: ${percent}% — ${message}`);
-        whatsAppStatus = 'cargando';
-        io.emit('whatsapp_status', 'cargando');
-    });
-
-    client.on('qr', (qr) => {
-        waQrAttempts++;
-        currentQR = qr;
-        whatsAppStatus = 'esperando_qr';
-        io.emit('whatsapp_qr', qr);
-        console.log(`--- SCAN QR CODE (intento ${waQrAttempts}/${WA_MAX_QR_ATTEMPTS}) ---`);
-        qrcode.generate(qr, { small: true });
-
-        if (waQrAttempts >= WA_MAX_QR_ATTEMPTS) {
-            console.log('⚠️ Demasiados QR sin escanear. Pausando hasta reinicio manual.');
-            whatsAppStatus = 'pausado_qr';
-            currentQR = null;
-            io.emit('whatsapp_status', 'pausado_qr');
-        }
+    puppeteer: {
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--single-process',
+            '--disable-gpu',
+            '--disable-extensions',
+            '--disable-background-networking',
+            '--disable-sync',
+            '--disable-translate',
+            '--disable-default-apps',
+            '--mute-audio',
+            '--no-first-run',
+            '--disable-software-rasterizer',
+            '--js-flags="--max-old-space-size=128"',
+            '--user-data-dir=/tmp/puppeteer_chromium',
+        ],
+        headless: true,
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+    }
     });
 
     client.on('authenticated', () => {
