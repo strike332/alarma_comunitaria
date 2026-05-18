@@ -21,7 +21,6 @@
 #include <ELECHOUSE_CC1101_SRC_DRV.h> // Librería Driver ESP32 para CC1101
 #include <RCSwitch.h>
 #include <WebServer.h>
-#include <mbedtls/base64.h>
 
 // --- MAPA DE HARDWARE DEFINITIVO (Documentado en PDF) ---
 const int PIN_ANTENA        = 4;   // D4 - Receptor RF 433 MHz (GDO0 del CC1101 va conectado AQUÍ, ya no en el 2)
@@ -60,13 +59,11 @@ unsigned long lastWifiCheckTime = 0;
 const unsigned long WIFI_CHECK_INTERVAL = 500; // Revisar cada 500ms
 
 // === CAMARA LOCAL (Snapshots via HTTP) ===
-String camIP = "192.168.100.131";   // IP de la cámara Dahua
+String camIP = "192.168.100.131";      // IP de la cámara local
 String camUser = "admin";           // Usuario cámara
 String camPass = "admin1234";       // Contraseña cámara
 unsigned long lastSnapshotTime = 0;
-unsigned long lastSnapshotFail = 0;
-const unsigned long SNAPSHOT_INTERVAL_MS = 5000; // Subir snapshot cada 5 segundos
-const unsigned long SNAPSHOT_FAIL_COOLDOWN = 30000; // Si falla, esperar 30s antes de reintentar
+const unsigned long SNAPSHOT_INTERVAL_MS = 2000; // Subir snapshot cada 2 segundos
 String snapshotAuth; // Basic auth codificado en setup()
 
 // === COMMAND LONG POLLING (Respuesta instantánea desde la nube) ===
@@ -118,20 +115,17 @@ void consultarComandosPendientes() {
 // ============================================================
 void capturarYSubirSnapshot() {
   if (WiFi.status() != WL_CONNECTED) return;
-  if (camIP.length() < 7) return;
+  if (camIP.length() < 7) return; // Sin cámara configurada
   if (millis() - lastSnapshotTime < SNAPSHOT_INTERVAL_MS) return;
-  
-  // Si falló antes, esperar cooldown antes de reintentar
-  if (lastSnapshotFail > 0 && (millis() - lastSnapshotFail < SNAPSHOT_FAIL_COOLDOWN)) return;
-  
   lastSnapshotTime = millis();
 
   WiFiClient client;
   HTTPClient httpCam, httpServer;
   
+  // Paso 1: Obtener JPEG de la cámara local
   String snapshotUrl = "http://" + camIP + "/cgi-bin/snapshot.cgi?channel=1";
   httpCam.begin(client, snapshotUrl);
-  httpCam.setTimeout(1500);
+  httpCam.setTimeout(3000);
   httpCam.addHeader("Authorization", "Basic " + snapshotAuth);
   
   int camCode = httpCam.GET();
@@ -141,22 +135,21 @@ void capturarYSubirSnapshot() {
     if (len > 100 && len < 200000) {
       uint8_t* jpeg = (uint8_t*)malloc(len);
       if (jpeg && httpCam.getStreamPtr()->readBytes(jpeg, len) == len) {
+        // Paso 2: Subir al droplet
         String mac = WiFi.macAddress();
         String uploadUrl = "http://" + backendIP + ":3001/api/esp/snapshot?mac=" + mac;
         
         httpServer.begin(uploadUrl);
         httpServer.addHeader("Content-Type", "image/jpeg");
-        httpServer.setTimeout(2000);
-        httpServer.POST(jpeg, len);
+        int uploadCode = httpServer.POST(jpeg, len);
+        
+        if (uploadCode == 200) {
+          // Snapshot subido exitosamente
+        }
         httpServer.end();
         free(jpeg);
-        lastSnapshotFail = 0; // Éxito, resetear cooldown
       }
-    } else {
-      lastSnapshotFail = millis(); // Cámara responde pero sin imagen válida
     }
-  } else {
-    lastSnapshotFail = millis(); // Cámara no disponible, esperar 30s
   }
   httpCam.end();
 }
@@ -504,6 +497,7 @@ void setup() {
   serverUrl = "http://" + backendIP + ":3001/api/alarm";
   registerUrl = "http://" + backendIP + ":3001/api/esp/register";
 
+  // Codificar Basic Auth para snapshot de cámara
   // Codificar Basic Auth para snapshot de cámara
   {
     String authStr = camUser + ":" + camPass;
