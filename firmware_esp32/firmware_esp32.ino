@@ -240,7 +240,30 @@ void capturarYSubirSnapshot() {
       }
     }
   } else if (code == 200) {
-    Serial.println("200 (sin auth)");
+    // Cámara aceptó sin auth — leer JPEG
+    int total = 0;
+    uint8_t* jpeg = (uint8_t*)malloc(200000);
+    if (jpeg) {
+      unsigned long t0 = millis();
+      while (millis() - t0 < 3000 && total < 199000) {
+        if (client.available()) { total += client.readBytes(jpeg + total, client.available()); }
+        else if (!client.connected()) break;
+        delay(5);
+      }
+      client.stop();
+      Serial.print(" len="); Serial.println(total);
+      if (total > 100) {
+        HTTPClient httpServer;
+        String mac = WiFi.macAddress();
+        httpServer.begin("http://" + backendIP + ":3001/api/esp/snapshot?mac=" + mac);
+        httpServer.addHeader("Content-Type", "image/jpeg");
+        httpServer.setTimeout(3000);
+        int up = httpServer.POST(jpeg, total);
+        Serial.print("subido="); Serial.println(up);
+        httpServer.end();
+      }
+      free(jpeg);
+    }
   } else {
     Serial.print("code="); Serial.println(code);
   }
