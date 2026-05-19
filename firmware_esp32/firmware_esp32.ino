@@ -21,6 +21,7 @@
 #include <ELECHOUSE_CC1101_SRC_DRV.h> // Librería Driver ESP32 para CC1101
 #include <RCSwitch.h>
 #include <WebServer.h>
+#include <mbedtls/md5.h>
 
 // Base64 manual (sin dependencias externas)
 String base64Encode(const String& input) {
@@ -128,6 +129,22 @@ void consultarComandosPendientes() {
 // ============================================================
 // FUNCIÓN: Capturar snapshot de cámara local y subirlo al droplet
 // ============================================================
+// --- Funciones auxiliares Digest Auth ---
+String digestMD5(const String& str) {
+  unsigned char hash[16];
+  mbedtls_md5((const unsigned char*)str.c_str(), str.length(), hash);
+  char hex[33];
+  for (int i = 0; i < 16; i++) sprintf(hex + i*2, "%02x", hash[i]);
+  hex[32] = 0;
+  return String(hex);
+}
+
+String randomHex(int len) {
+  String s;
+  for (int i = 0; i < len; i++) s += String(random(0, 16), HEX);
+  return s;
+}
+
 void capturarYSubirSnapshot() {
   if (WiFi.status() != WL_CONNECTED) return;
   if (camIP.length() < 7) return;
@@ -135,12 +152,47 @@ void capturarYSubirSnapshot() {
   lastSnapshotTime = millis();
 
   HTTPClient httpCam;
-  String snapshotUrl = "http://" + camIP + "/onvifsnapshot/media_service/snapshot?channel=1&subtype=0";
+  String uri = "/onvifsnapshot/media_service/snapshot?channel=1&subtype=0";
+  String snapshotUrl = "http://" + camIP + uri;
+  
+  // Intento 1: Basic Auth
   httpCam.begin(snapshotUrl);
   httpCam.setTimeout(3000);
   httpCam.addHeader("Authorization", "Basic " + snapshotAuth);
-  
   int camCode = httpCam.GET();
+  
+  // Intento 2: Digest Auth
+  if (camCode == 401) {
+    String wwwAuth = httpCam.header("WWW-Authenticate");
+    httpCam.end();
+    
+    // Parsear realm, nonce, qop
+    String realm = "", nonce = "", qop = "";
+    int p = wwwAuth.indexOf("realm=\"");
+    if (p >= 0) { p += 7; int e = wwwAuth.indexOf("\"", p); if (e >= 0) realm = wwwAuth.substring(p, e); }
+    p = wwwAuth.indexOf("nonce=\"");
+    if (p >= 0) { p += 7; int e = wwwAuth.indexOf("\"", p); if (e >= 0) nonce = wwwAuth.substring(p, e); }
+    p = wwwAuth.indexOf("qop=\"");
+    if (p >= 0) { p += 5; int e = wwwAuth.indexOf("\"", p); if (e >= 0) qop = wwwAuth.substring(p, e); }
+    
+    String nc = "00000001";
+    String cnonce = randomHex(8);
+    if (qop.length() == 0) qop = "auth";
+    
+    String ha1 = digestMD5(camUser + ":" + realm + ":" + camPass);
+    String ha2 = digestMD5("GET:" + uri);
+    String response = digestMD5(ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":" + qop + ":" + ha2);
+    
+    String digestAuth = "Digest username=\"" + camUser + "\", realm=\"" + realm + 
+      "\", nonce=\"" + nonce + "\", uri=\"" + uri + "\", qop=" + qop + 
+      ", nc=" + nc + ", cnonce=\"" + cnonce + "\", response=\"" + response + "\"";
+    
+    httpCam.begin(snapshotUrl);
+    httpCam.setTimeout(3000);
+    httpCam.addHeader("Authorization", digestAuth);
+    camCode = httpCam.GET();
+  }
+  
   Serial.print("📷 Cam HTTP "); Serial.print(camCode); Serial.print(" len=");
 
   if (camCode == 200) {
