@@ -30,10 +30,6 @@ String digestMD5(const String& str) {
   md5.calculate();
   return md5.toString();
 }
-  if (bits > -6) out += b64chars[((val << 8) >> (bits + 8)) & 0x3F];
-  while (out.length() % 4) out += '=';
-  return out;
-}
 
 // --- MAPA DE HARDWARE DEFINITIVO (Documentado en PDF) ---
 const int PIN_ANTENA        = 4;   // D4 - Receptor RF 433 MHz (GDO0 del CC1101 va conectado AQUÍ, ya no en el 2)
