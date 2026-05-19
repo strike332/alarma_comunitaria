@@ -192,13 +192,16 @@ void capturarYSubirSnapshot() {
 
       // Paso 2: GET con Digest Auth
       WiFiClient client2;
-      if (client2.connect(camIP.c_str(), 80)) {
+      if (!client2.connect(camIP.c_str(), 80)) {
+        Serial.println("FAIL: no conecta 2");
+      } else {
         String auth = "Digest username=\"" + camUser + "\", realm=\"" + realm + 
           "\", nonce=\"" + nonce + "\", uri=\"" + uri + "\", qop=" + qop + 
           ", nc=" + nc + ", cnonce=\"" + cnonce + "\", response=\"" + resp + "\"";
         client2.print("GET " + uri + " HTTP/1.1\r\nHost: " + camIP + "\r\nAuthorization: " + auth + "\r\nConnection: close\r\n\r\n");
         
         statusLine = client2.readStringUntil('\n');
+        Serial.print("Digest status="); Serial.println(statusLine);
         code = statusLine.indexOf("200") > 0 ? 200 : 0;
         
         // Saltar headers
