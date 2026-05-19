@@ -180,28 +180,21 @@ void capturarYSubirSnapshot() {
     if (p >= 0) { p += 5; int e = rawHeaders.indexOf("\"", p); if (e >= 0) qop = rawHeaders.substring(p, e); }
     
     Serial.print("realm="); Serial.println(realm);
-    Serial.print("nonce="); Serial.println(nonce.substring(0,60));
     
     if (nonce.length() > 0 && realm.length() > 0) {
       String nc = "00000001", cnonce = randomHex(8);
       String ha1 = digestMD5(camUser + ":" + realm + ":" + camPass);
       String ha2 = digestMD5("GET:" + uri);
-      String resp = digestMD5(ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":" + qop + ":" + ha2);
-      Serial.print("HA1="); Serial.println(ha1);
-      Serial.print("RSP="); Serial.println(resp);
+      String respVal = digestMD5(ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":" + qop + ":" + ha2);
 
-      // Paso 2: GET con Digest Auth
       WiFiClient client2;
-      if (!client2.connect(camIP.c_str(), 80)) {
-        Serial.println("FAIL: no conecta 2");
-      } else {
+      if (client2.connect(camIP.c_str(), 80)) {
         String auth = "Digest username=\"" + camUser + "\", realm=\"" + realm + 
           "\", nonce=\"" + nonce + "\", uri=\"" + uri + "\", qop=" + qop + 
-          ", nc=" + nc + ", cnonce=\"" + cnonce + "\", response=\"" + resp + "\"";
+          ", nc=" + nc + ", cnonce=\"" + cnonce + "\", response=\"" + respVal + "\"";
         client2.print("GET " + uri + " HTTP/1.1\r\nHost: " + camIP + "\r\nAuthorization: " + auth + "\r\nConnection: close\r\n\r\n");
         
         statusLine = client2.readStringUntil('\n');
-        Serial.print("Digest status="); Serial.println(statusLine);
         code = statusLine.indexOf("200") > 0 ? 200 : 0;
         
         // Saltar headers
@@ -211,39 +204,32 @@ void capturarYSubirSnapshot() {
         }
         
         if (code == 200) {
-          // Leer body JPEG (buffer 60KB)
-          delay(200);
+          delay(100);
           int total = 0;
           uint8_t* jpeg = (uint8_t*)malloc(60000);
-          Serial.print(" avail="); Serial.println(client2.available());
           if (jpeg) {
             unsigned long t0 = millis();
             while (millis() - t0 < 4000 && total < 59000) {
               if (client2.available()) {
-                int rd = client2.readBytes(jpeg + total, client2.available());
-                total += rd;
-              } else if (!client2.connected()) { 
-                delay(50);
-                if (!client2.available()) break; 
-              }
+                total += client2.readBytes(jpeg + total, client2.available());
+              } else if (!client2.connected()) { delay(50); if (!client2.available()) break; }
               delay(10);
             }
             client2.stop();
-            Serial.print(" len="); Serial.println(total);
             if (total > 100) {
               HTTPClient httpServer;
               String mac = WiFi.macAddress();
               httpServer.begin("http://" + backendIP + ":3001/api/esp/snapshot?mac=" + mac);
               httpServer.addHeader("Content-Type", "image/jpeg");
               httpServer.setTimeout(3000);
-              int up = httpServer.POST(jpeg, total);
-              Serial.print("subido="); Serial.println(up);
+              httpServer.POST(jpeg, total);
               httpServer.end();
+              Serial.print("📷");
             }
             free(jpeg);
             return;
           }
-          Serial.println(" malloc FAIL");
+          client2.stop();
           client2.stop();
         }
       }
