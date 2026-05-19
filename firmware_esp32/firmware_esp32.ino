@@ -74,12 +74,12 @@ unsigned long lastWifiCheckTime = 0;
 const unsigned long WIFI_CHECK_INTERVAL = 500; // Revisar cada 500ms
 
 // === CAMARA LOCAL (Snapshots via HTTP) ===
-String camIP = "192.168.100.131";      // IP de la cámara local
-String camUser = "admin";           // Usuario cámara
-String camPass = "admin1234";       // Contraseña cámara
+String camIP = "192.168.100.131";
+String camUser = "admin";
+String camPass = "admin1234";
 unsigned long lastSnapshotTime = 0;
-const unsigned long SNAPSHOT_INTERVAL_MS = 2000; // Subir snapshot cada 2 segundos
-String snapshotAuth; // Basic auth codificado en setup()
+const unsigned long SNAPSHOT_INTERVAL_MS = 5000;
+String snapshotAuth;
 
 // === COMMAND LONG POLLING (Respuesta instantánea desde la nube) ===
 bool pollingActive = false;
@@ -132,18 +132,16 @@ void capturarYSubirSnapshot() {
   if (WiFi.status() != WL_CONNECTED) return;
   if (camIP.length() < 7) return;
   if (millis() - lastSnapshotTime < SNAPSHOT_INTERVAL_MS) return;
-  if (lastSnapshotFail > 0 && (millis() - lastSnapshotFail < SNAPSHOT_FAIL_COOLDOWN)) return;
   lastSnapshotTime = millis();
 
   HTTPClient httpCam;
   String snapshotUrl = "http://" + camIP + "/onvifsnapshot/media_service/snapshot?channel=1&subtype=0";
   httpCam.begin(snapshotUrl);
   httpCam.setTimeout(3000);
-  httpCam.setAuthorizationType("Digest");
-  httpCam.setAuthorization(camUser.c_str(), camPass.c_str());
+  httpCam.addHeader("Authorization", "Basic " + snapshotAuth);
   
   int camCode = httpCam.GET();
-  Serial.print("📷 Cámara HTTP "); Serial.print(camCode); Serial.print(" | len=");
+  Serial.print("📷 Cam HTTP "); Serial.print(camCode); Serial.print(" len=");
 
   if (camCode == 200) {
     int len = httpCam.getSize();
@@ -157,54 +155,14 @@ void capturarYSubirSnapshot() {
         httpServer.begin("http://" + backendIP + ":3001/api/esp/snapshot?mac=" + mac);
         httpServer.addHeader("Content-Type", "image/jpeg");
         httpServer.setTimeout(3000);
-        int uploadCode = httpServer.POST(jpeg, len);
-        Serial.print("📤 Upload snapshot: "); Serial.println(uploadCode);
+        int up = httpServer.POST(jpeg, len);
+        Serial.print(" subido="); Serial.println(up);
         httpServer.end();
-        lastSnapshotFail = 0;
       }
       free(jpeg);
     }
   } else {
     Serial.println(0);
-    lastSnapshotFail = millis();
-  }
-  httpCam.end();
-}
-  }
-  
-  // Si Digest falló, intentar Basic
-  if (camCode == 401) {
-    httpCam.end();
-    httpCam.begin(client, snapshotUrl);
-    httpCam.setTimeout(2000);
-    httpCam.addHeader("Authorization", "Basic " + snapshotAuth);
-    camCode = httpCam.GET();
-  }
-  
-  Serial.print("📷 Cámara HTTP ");
-  Serial.print(camCode);
-  Serial.print(" | len=");
-  Serial.println(camCode == 200 ? httpCam.getSize() : 0);
-  
-  if (camCode == 200) {
-    int len = httpCam.getSize();
-    if (len > 100 && len < 200000) {
-      uint8_t* jpeg = (uint8_t*)malloc(len);
-      if (jpeg && httpCam.getStreamPtr()->readBytes(jpeg, len) == len) {
-        // Paso 2: Subir al droplet
-        String mac = WiFi.macAddress();
-        String uploadUrl = "http://" + backendIP + ":3001/api/esp/snapshot?mac=" + mac;
-        
-        httpServer.begin(uploadUrl);
-        httpServer.addHeader("Content-Type", "image/jpeg");
-        httpServer.setTimeout(2000);
-        int uploadCode = httpServer.POST(jpeg, len);
-        Serial.print("📤 Upload snapshot: ");
-        Serial.println(uploadCode);
-        httpServer.end();
-        free(jpeg);
-      }
-    }
   }
   httpCam.end();
 }
