@@ -31,6 +31,25 @@ String digestMD5(const String& str) {
   return md5.toString();
 }
 
+String base64Encode(const String& input) {
+  const char* b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  String out;
+  int val = 0, bits = -6;
+  for (unsigned int i = 0; i < input.length(); i++) {
+    val = (val << 8) + input[i]; bits += 8;
+    while (bits >= 0) { out += b64[(val >> bits) & 0x3F]; bits -= 6; }
+  }
+  if (bits > -6) out += b64[((val << 8) >> (bits + 8)) & 0x3F];
+  while (out.length() % 4) out += '=';
+  return out;
+}
+
+String randomHex(int len) {
+  String s;
+  for (int i = 0; i < len; i++) s += String(random(0, 16), HEX);
+  return s;
+}
+
 // --- MAPA DE HARDWARE DEFINITIVO (Documentado en PDF) ---
 const int PIN_ANTENA        = 4;   // D4 - Receptor RF 433 MHz (GDO0 del CC1101 va conectado AQUÍ, ya no en el 2)
 const int PIN_RELE_EXTERNO  = 26;  // Relé externo: LOW = activar, HIGH = desactivar firmemente
@@ -122,22 +141,6 @@ void consultarComandosPendientes() {
 // ============================================================
 // FUNCIÓN: Capturar snapshot de cámara local y subirlo al droplet
 // ============================================================
-// --- Funciones auxiliares Digest Auth ---
-String digestMD5(const String& str) {
-  unsigned char hash[16];
-  mbedtls_md5((const unsigned char*)str.c_str(), str.length(), hash);
-  char hex[33];
-  for (int i = 0; i < 16; i++) sprintf(hex + i*2, "%02x", hash[i]);
-  hex[32] = 0;
-  return String(hex);
-}
-
-String randomHex(int len) {
-  String s;
-  for (int i = 0; i < len; i++) s += String(random(0, 16), HEX);
-  return s;
-}
-
 void capturarYSubirSnapshot() {
   if (WiFi.status() != WL_CONNECTED) return;
   if (camIP.length() < 7) return;
