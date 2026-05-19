@@ -212,16 +212,21 @@ void capturarYSubirSnapshot() {
         
         if (code == 200) {
           // Leer body JPEG
+          delay(200); // esperar que llegue el body
           int total = 0;
           uint8_t* jpeg = (uint8_t*)malloc(200000);
+          Serial.print(" avail="); Serial.println(client2.available());
           if (jpeg) {
             unsigned long t0 = millis();
-            while (millis() - t0 < 3000 && total < 199000) {
+            while (millis() - t0 < 4000 && total < 199000) {
               if (client2.available()) {
                 int rd = client2.readBytes(jpeg + total, client2.available());
                 total += rd;
-              } else if (!client2.connected()) { break; }
-              delay(5);
+              } else if (!client2.connected()) { 
+                delay(50);
+                if (!client2.available()) break; 
+              }
+              delay(10);
             }
             client2.stop();
             Serial.print(" len="); Serial.println(total);
