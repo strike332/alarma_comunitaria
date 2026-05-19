@@ -21,18 +21,15 @@
 #include <ELECHOUSE_CC1101_SRC_DRV.h> // Librería Driver ESP32 para CC1101
 #include <RCSwitch.h>
 #include <WebServer.h>
-#include <mbedtls/md5.h>
 
-// Base64 manual (sin dependencias externas)
-String base64Encode(const String& input) {
-  const char* b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  String out;
-  int val = 0, bits = -6;
-  for (unsigned int i = 0; i < input.length(); i++) {
-    val = (val << 8) + input[i];
-    bits += 8;
-    while (bits >= 0) { out += b64chars[(val >> bits) & 0x3F]; bits -= 6; }
-  }
+// --- Funciones auxiliares Digest Auth ---
+String digestMD5(const String& str) {
+  MD5Builder md5;
+  md5.begin();
+  md5.add(str);
+  md5.calculate();
+  return md5.toString();
+}
   if (bits > -6) out += b64chars[((val << 8) >> (bits + 8)) & 0x3F];
   while (out.length() % 4) out += '=';
   return out;
