@@ -46,7 +46,9 @@ String base64Encode(const String& input) {
 
 String randomHex(int len) {
   String s;
-  for (int i = 0; i < len; i++) s += String(random(0, 16), HEX);
+  for (int i = 0; i < len; i++) {
+    s += String(random(0, 16), HEX);
+  }
   return s;
 }
 
@@ -178,6 +180,13 @@ void capturarYSubirSnapshot() {
     String ha1 = digestMD5(camUser + ":" + realm + ":" + camPass);
     String ha2 = digestMD5("GET:" + uri);
     String response = digestMD5(ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":" + qop + ":" + ha2);
+    
+    Serial.print("HA1="); Serial.println(ha1);
+    Serial.print("HA2="); Serial.println(ha2);
+    Serial.print("RSP="); Serial.println(response);
+    Serial.print("nonce="); Serial.println(nonce);
+    Serial.print("realm="); Serial.println(realm);
+    Serial.print("qop="); Serial.println(qop);
     
     String digestAuth = "Digest username=\"" + camUser + "\", realm=\"" + realm + 
       "\", nonce=\"" + nonce + "\", uri=\"" + uri + "\", qop=" + qop + 
