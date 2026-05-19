@@ -153,19 +153,17 @@ void capturarYSubirSnapshot() {
   String uri = "/onvifsnapshot/media_service/snapshot?channel=1&subtype=0";
   String snapshotUrl = "http://" + camIP + uri;
   
-  // Intento 1: Basic Auth
+  // Paso 1: GET sin auth para obtener challenge Digest
   httpCam.begin(snapshotUrl);
-  httpCam.setTimeout(3000);
-  httpCam.addHeader("Authorization", "Basic " + snapshotAuth);
+  httpCam.setTimeout(2000);
   int camCode = httpCam.GET();
   
-  // Intento 2: Digest Auth
   if (camCode == 401) {
     String wwwAuth = httpCam.header("WWW-Authenticate");
     httpCam.end();
     
-    // Parsear realm, nonce, qop
-    String realm = "", nonce = "", qop = "";
+    // Parsear realm, nonce, qop del header Digest
+    String realm = "", nonce = "", qop = "auth";
     int p = wwwAuth.indexOf("realm=\"");
     if (p >= 0) { p += 7; int e = wwwAuth.indexOf("\"", p); if (e >= 0) realm = wwwAuth.substring(p, e); }
     p = wwwAuth.indexOf("nonce=\"");
@@ -173,29 +171,29 @@ void capturarYSubirSnapshot() {
     p = wwwAuth.indexOf("qop=\"");
     if (p >= 0) { p += 5; int e = wwwAuth.indexOf("\"", p); if (e >= 0) qop = wwwAuth.substring(p, e); }
     
-    String nc = "00000001";
-    String cnonce = randomHex(8);
-    if (qop.length() == 0) qop = "auth";
-    
-    String ha1 = digestMD5(camUser + ":" + realm + ":" + camPass);
-    String ha2 = digestMD5("GET:" + uri);
-    String response = digestMD5(ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":" + qop + ":" + ha2);
-    
-    Serial.print("HA1="); Serial.println(ha1);
-    Serial.print("HA2="); Serial.println(ha2);
-    Serial.print("RSP="); Serial.println(response);
-    Serial.print("nonce="); Serial.println(nonce);
     Serial.print("realm="); Serial.println(realm);
-    Serial.print("qop="); Serial.println(qop);
+    Serial.print("nonce="); Serial.println(nonce.substring(0,40));
     
-    String digestAuth = "Digest username=\"" + camUser + "\", realm=\"" + realm + 
-      "\", nonce=\"" + nonce + "\", uri=\"" + uri + "\", qop=" + qop + 
-      ", nc=" + nc + ", cnonce=\"" + cnonce + "\", response=\"" + response + "\"";
-    
-    httpCam.begin(snapshotUrl);
-    httpCam.setTimeout(3000);
-    httpCam.addHeader("Authorization", digestAuth);
-    camCode = httpCam.GET();
+    if (nonce.length() > 0 && realm.length() > 0) {
+      String nc = "00000001";
+      String cnonce = randomHex(8);
+      
+      String ha1 = digestMD5(camUser + ":" + realm + ":" + camPass);
+      String ha2 = digestMD5("GET:" + uri);
+      String response = digestMD5(ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":" + qop + ":" + ha2);
+      
+      Serial.print("HA1="); Serial.println(ha1);
+      Serial.print("RSP="); Serial.println(response);
+      
+      String digestAuth = "Digest username=\"" + camUser + "\", realm=\"" + realm + 
+        "\", nonce=\"" + nonce + "\", uri=\"" + uri + "\", qop=" + qop + 
+        ", nc=" + nc + ", cnonce=\"" + cnonce + "\", response=\"" + response + "\"";
+      
+      httpCam.begin(snapshotUrl);
+      httpCam.setTimeout(3000);
+      httpCam.addHeader("Authorization", digestAuth);
+      camCode = httpCam.GET();
+    }
   }
   
   Serial.print("📷 Cam HTTP "); Serial.print(camCode); Serial.print(" len=");
