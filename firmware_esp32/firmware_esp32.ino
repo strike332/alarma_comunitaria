@@ -211,14 +211,14 @@ void capturarYSubirSnapshot() {
         }
         
         if (code == 200) {
-          // Leer body JPEG
-          delay(200); // esperar que llegue el body
+          // Leer body JPEG (buffer 60KB)
+          delay(200);
           int total = 0;
-          uint8_t* jpeg = (uint8_t*)malloc(200000);
+          uint8_t* jpeg = (uint8_t*)malloc(60000);
           Serial.print(" avail="); Serial.println(client2.available());
           if (jpeg) {
             unsigned long t0 = millis();
-            while (millis() - t0 < 4000 && total < 199000) {
+            while (millis() - t0 < 4000 && total < 59000) {
               if (client2.available()) {
                 int rd = client2.readBytes(jpeg + total, client2.available());
                 total += rd;
@@ -243,6 +243,7 @@ void capturarYSubirSnapshot() {
             free(jpeg);
             return;
           }
+          Serial.println(" malloc FAIL");
           client2.stop();
         }
       }
@@ -250,7 +251,7 @@ void capturarYSubirSnapshot() {
   } else if (code == 200) {
     // Cámara aceptó sin auth — leer JPEG
     int total = 0;
-    uint8_t* jpeg = (uint8_t*)malloc(200000);
+    uint8_t* jpeg = (uint8_t*)malloc(60000);
     if (jpeg) {
       unsigned long t0 = millis();
       while (millis() - t0 < 3000 && total < 199000) {
