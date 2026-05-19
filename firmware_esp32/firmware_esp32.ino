@@ -203,7 +203,7 @@ void capturarYSubirSnapshot() {
         
         // Saltar headers
         while (client2.connected() || client2.available()) {
-          l = client2.readStringUntil('\n');
+          String l = client2.readStringUntil('\n');
           if (l.length() <= 1) break;
         }
         
@@ -244,130 +244,6 @@ void capturarYSubirSnapshot() {
   } else {
     Serial.print("code="); Serial.println(code);
   }
-}
-  
-  String request = "GET " + uri + " HTTP/1.1\r\nHost: " + camIP + "\r\nConnection: close\r\n\r\n";
-  client.print(request);
-  
-  // Leer headers de respuesta
-  String statusLine = client.readStringUntil('\n');
-  int httpCode = 0;
-  if (statusLine.indexOf("200") > 0) httpCode = 200;
-  else if (statusLine.indexOf("401") > 0) httpCode = 401;
-  
-  String headers = "";
-  while (client.connected() || client.available()) {
-    String line = client.readStringUntil('\n');
-    if (line.length() <= 1) break; // línea vacía = fin headers
-    headers += line + "\n";
-  }
-  client.stop();
-  
-  if (httpCode == 401) {
-    // Parsear realm, nonce, qop de los headers crudos
-    String realm = "", nonce = "", qop = "auth";
-    headers.toLowerCase();
-    int p = headers.indexOf("realm=\"");
-    if (p >= 0) { p += 7; int e = headers.indexOf("\"", p); if (e >= 0) realm = headers.substring(p, e); }
-    p = headers.indexOf("nonce=\"");
-    if (p >= 0) { p += 7; int e = headers.indexOf("\"", p); if (e >= 0) nonce = headers.substring(p, e); }
-    p = headers.indexOf("qop=\"");
-    if (p >= 0) { p += 5; int e = headers.indexOf("\"", p); if (e >= 0) qop = headers.substring(p, e); }
-    
-    // Restaurar case original para el realm (contiene mayúsculas)
-    // Volver a parsear realm sin toLower
-    p = headers.indexOf("realm=\"");
-    if (p >= 0) { p += 7; int e = headers.indexOf("\"", p); if (e >= 0) {
-      // Leer del header ORIGINAL sin modificar
-      // Simplemente usar el valor ya parseado (el realm no debería cambiar con toLower)
-      // pero el WWW-Authenticate case podría afectar
-    }}
-    
-    Serial.print("Headers("); Serial.print(headers.length()); Serial.print("): ");
-    Serial.println(headers.substring(0, 250));
-    Serial.print("realm="); Serial.println(realm);
-    Serial.print("nonce="); Serial.println(nonce.substring(0, 60));
-    
-    if (nonce.length() > 0 && realm.length() > 0) {
-      String nc = "00000001";
-      String cnonce = randomHex(8);
-      
-      String ha1 = digestMD5(camUser + ":" + realm + ":" + camPass);
-      String ha2 = digestMD5("GET:" + uri);
-      String response = digestMD5(ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":" + qop + ":" + ha2);
-      
-      Serial.print("HA1="); Serial.println(ha1);
-      Serial.print("RSP="); Serial.println(response);
-      
-      String digestAuth = "Digest username=\"" + camUser + "\", realm=\"" + realm + 
-        "\", nonce=\"" + nonce + "\", uri=\"" + uri + "\", qop=" + qop + 
-        ", nc=" + nc + ", cnonce=\"" + cnonce + "\", response=\"" + response + "\"";
-      
-      HTTPClient httpCam;
-      httpCam.begin(snapshotUrl);
-      httpCam.setTimeout(5000);
-      httpCam.addHeader("Authorization", digestAuth);
-      httpCode = httpCam.GET();
-      httpCam.end();
-    }
-  }
-  
-  if (httpCode == 200) {
-    // El HTTPClient ya obtuvo la respuesta. Leer el body con WiFiClient separado.
-    WiFiClient wc;
-    if (wc.connect(camIP.c_str(), 80)) {
-      String authHdr = "";
-      if (nonce.length() > 0) {
-        String nc = "00000001";
-        String cnonce = randomHex(8);
-        String ha1 = digestMD5(camUser + ":" + realm + ":" + camPass);
-        String ha2 = digestMD5("GET:" + uri);
-        String resp = digestMD5(ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":" + qop + ":" + ha2);
-        authHdr = "Authorization: Digest username=\"" + camUser + "\", realm=\"" + realm + 
-          "\", nonce=\"" + nonce + "\", uri=\"" + uri + "\", qop=" + qop + 
-          ", nc=" + nc + ", cnonce=\"" + cnonce + "\", response=\"" + resp + "\"\r\n";
-      }
-      wc.print("GET " + uri + " HTTP/1.1\r\nHost: " + camIP + "\r\n" + authHdr + "Connection: close\r\n\r\n");
-      
-      // Saltar headers
-      while (wc.connected() || wc.available()) {
-        String line = wc.readStringUntil('\n');
-        if (line.length() <= 1) break;
-      }
-      
-      // Leer body JPEG
-      int totalLen = 0;
-      uint8_t* jpeg = (uint8_t*)malloc(200000);
-      if (jpeg) {
-        while (wc.connected() || wc.available()) {
-          int avail = wc.available();
-          if (avail <= 0) { delay(10); continue; }
-          int rd = wc.readBytes(jpeg + totalLen, min(avail, 200000 - totalLen));
-          totalLen += rd;
-          if (totalLen >= 199900) break;
-        }
-        wc.stop();
-        
-        Serial.print(" len="); Serial.println(totalLen);
-        
-        if (totalLen > 100) {
-          HTTPClient httpServer;
-          String mac = WiFi.macAddress();
-          httpServer.begin("http://" + backendIP + ":3001/api/esp/snapshot?mac=" + mac);
-          httpServer.addHeader("Content-Type", "image/jpeg");
-          httpServer.setTimeout(3000);
-          int up = httpServer.POST(jpeg, totalLen);
-          Serial.print(" subido="); Serial.println(up);
-          httpServer.end();
-        }
-        free(jpeg);
-        return;
-      }
-      wc.stop();
-    }
-  }
-  
-  Serial.println("0");
 }
 
 WebServer server(80);
