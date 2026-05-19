@@ -160,6 +160,8 @@ void capturarYSubirSnapshot() {
   
   if (camCode == 401) {
     String wwwAuth = httpCam.header("WWW-Authenticate");
+    Serial.print("wwwAuth RAW("); Serial.print(wwwAuth.length()); Serial.print("): ");
+    Serial.println(wwwAuth.substring(0, 200));
     httpCam.end();
     
     // Parsear realm, nonce, qop del header Digest
