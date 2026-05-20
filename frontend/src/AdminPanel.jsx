@@ -620,6 +620,17 @@ export default function AdminPanel() {
                   </div>
                 )}
 
+                {camConnectionType === 'p2p_local' && (
+                  <div style={{ padding: '1rem', background: '#262626', borderRadius: '0.5rem', border: '1px dashed #fbbf24' }}>
+                    <p style={{ color: '#fbbf24', marginTop: 0, fontSize: '0.9rem' }}>Cámara local vía ESP32. El ESP32 toma snapshots y los sube al droplet.</p>
+                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                      <input type="text" required placeholder="IP: 192.168.100.131" value={camIp} onChange={e => setCamIp(e.target.value)} style={{ flex: 1, minWidth: '150px', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #444', background: '#171717', color: 'white', fontFamily: 'monospace' }} />
+                      <input type="text" required placeholder="Usuario" value={camUser} onChange={e => setCamUser(e.target.value)} style={{ flex: 1, minWidth: '120px', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #444', background: '#171717', color: 'white' }} />
+                      <input type="password" required placeholder="Contraseña" value={camPass} onChange={e => setCamPass(e.target.value)} style={{ flex: 1, minWidth: '120px', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #444', background: '#171717', color: 'white' }} />
+                    </div>
+                  </div>
+                )}
+
                 {camConnectionType === 'p2p' && (
                   <div style={{ padding: '1rem', background: '#262626', borderRadius: '0.5rem', border: '1px dashed #3b82f6' }}>
                     <p style={{ color: '#60a5fa', marginTop: 0, fontSize: '0.9rem' }}>Pega el enlace de compartir desde DMSS</p>

@@ -661,8 +661,10 @@ void loop() {
     consultarComandosPendientes();
   }
 
-  // Subir snapshots de cámara local al droplet (cada 2 segundos)
-  capturarYSubirSnapshot();
+  // Solo subir snapshots mientras la alarma está activa
+  if (isAlarmActive) {
+    capturarYSubirSnapshot();
+  }
 
   // Capa de Auto-Silencio (Seguro Vecinal 3 Minutos)
   if (isAlarmActive && (millis() - alarmStartTime > ALARM_TIMEOUT_MS)) {

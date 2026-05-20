@@ -14,7 +14,7 @@ const AxiosDigestAuth = require('axios-digest').default;
 const { MercadoPagoConfig, Preference, PreApproval } = require('mercadopago');
 const { z } = require('zod');
 require('dotenv').config();
-const { execFile, exec } = require('child_process');
+const { execFile, exec, execSync } = require('child_process');
 const fs = require('fs');
 
 // ============================================================
@@ -342,7 +342,6 @@ function createWhatsAppClient() {
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
-            '--single-process',
             '--disable-gpu',
             '--disable-extensions',
             '--disable-background-networking',
@@ -360,9 +359,37 @@ function createWhatsAppClient() {
     }
     });
 
+    // Timeout de inicialización: si no autentica en 60s, reiniciar
+    let waInitTimer = setTimeout(() => {
+        console.log('⚠️ WhatsApp no inicializó en 60s. Reiniciando...');
+        scheduleReconnect();
+    }, 60000);
+
     client.on('authenticated', () => {
+        clearTimeout(waInitTimer);
         console.log('🔑 WhatsApp autenticado correctamente.');
         waQrAttempts = 0;
+    });
+
+    client.on('qr', (qr) => {
+        clearTimeout(waInitTimer);
+        waQrAttempts++;
+        if (waQrAttempts > WA_MAX_QR_ATTEMPTS) {
+            console.log('⚠️ Demasiados QRs sin escanear. Pausa 2 min...');
+            whatsAppStatus = 'qr_max_intentos';
+            io.emit('whatsapp_status', 'qr_max_intentos');
+            setTimeout(() => {
+                waQrAttempts = 0;
+                scheduleReconnect();
+            }, 120000);
+            return;
+        }
+        currentQR = qr;
+        whatsAppStatus = 'esperando_qr';
+        io.emit('whatsapp_status', 'esperando_qr');
+        io.emit('whatsapp_qr', qr);
+        qrcode.generate(qr, { small: true });
+        console.log('📱 QR generado. Escanea con WhatsApp.');
     });
 
     client.on('ready', () => {
@@ -388,12 +415,19 @@ function createWhatsAppClient() {
         }, WA_WATCHDOG_INTERVAL);
     });
 
-    client.on('auth_failure', (msg) => {
+    client.on('auth_failure', async (msg) => {
         console.error('❌ WhatsApp auth failure:', msg);
+        waQrAttempts = 0;
         whatsAppStatus = 'auth_failure';
         currentQR = null;
         io.emit('whatsapp_status', 'auth_failure');
-        // En auth_failure, la sesión está corrupta — no reintentar automáticamente
+
+        // Auto-limpiar sesión corrupta y reiniciar con QR nuevo
+        console.log('🗑️ Sesión corrupta detectada. Limpiando...');
+        try { await whatsapp.destroy(); } catch(e) {}
+        try { execSync('rm -rf /app/backend/.wwebjs_auth/* 2>/dev/null || true'); } catch(e) {}
+
+        scheduleReconnect();
     });
 
     client.on('disconnected', (reason) => {
@@ -445,6 +479,8 @@ function scheduleReconnect() {
 
         // Destruir el cliente viejo de forma segura
         try { await whatsapp.destroy(); } catch (e) {}
+        // Limpiar procesos huérfanos de Chromium
+        try { execSync('pkill -f chromium 2>/dev/null || true'); } catch(e) {}
 
         whatsAppStatus = 'cargando';
         currentQR = null;
@@ -481,6 +517,7 @@ async function restartWhatsApp() {
     waReconnectTimer = null;
     clearInterval(waWatchdogTimer);
     try { await whatsapp.destroy(); } catch(e) {}
+    try { execSync('pkill -f chromium 2>/dev/null || true'); } catch(e) {}
     whatsAppStatus = 'cargando';
     currentQR = null;
     io.emit('whatsapp_status', 'cargando');
