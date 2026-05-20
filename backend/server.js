@@ -342,6 +342,7 @@ function createWhatsAppClient() {
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
+            '--single-process',
             '--disable-gpu',
             '--disable-extensions',
             '--disable-background-networking',
@@ -468,7 +469,8 @@ function createWhatsAppClient() {
 
     console.log('🔄 Inicializando cliente de WhatsApp...');
     client.initialize().catch(e => {
-        console.error('Fallo al inicializar WhatsApp:', e.message);
+        console.error('❌ Fallo al inicializar WhatsApp:', e.message);
+        console.error('   Stack:', (e.stack || '').split('\n').slice(0,3).join(' | '));
         scheduleReconnect();
     });
 

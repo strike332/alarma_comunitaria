@@ -32,7 +32,7 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV CHROMIUM_FLAGS="--no-sandbox --disable-gpu --disable-dev-shm-usage"
 ENV NODE_ENV=production
-ENV BUILD_VERSION=2
+ENV BUILD_VERSION=3
 
 WORKDIR /app
 
