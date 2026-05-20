@@ -333,9 +333,9 @@ function createWhatsAppClient() {
     clearInterval(waWatchdogTimer);
     waQrAttempts = 0;
 
-    // Limpiar perfil Chrome completo (evita locks de procesos muertos en Docker restart)
-    try { execSync('rm -rf /tmp/puppeteer_chromium'); } catch(e) {}
-    try { execSync('mkdir -p /tmp/puppeteer_chromium'); } catch(e) {}
+    // Perfil Chrome ÚNICO por arranque => nunca hay conflicto de locks entre instancias
+    const profileDir = `/tmp/chrome_${Date.now()}`;
+    console.log(`🧹 Perfil Chrome: ${profileDir}`);
 
     const chromePath = process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
 
@@ -357,7 +357,7 @@ function createWhatsAppClient() {
             '--no-first-run',
             '--disable-software-rasterizer',
             '--js-flags="--max-old-space-size=128"',
-            '--user-data-dir=/tmp/puppeteer_chromium',
+            `--user-data-dir=${profileDir}`,
         ],
         headless: true,
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
