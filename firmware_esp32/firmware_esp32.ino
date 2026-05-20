@@ -88,13 +88,102 @@ const unsigned long SYNC_INTERVAL_MS = 300000; // Sincronizar cada 5 minutos
 unsigned long lastWifiCheckTime = 0;
 const unsigned long WIFI_CHECK_INTERVAL = 500; // Revisar cada 500ms
 
-// === CAMARA LOCAL (Snapshots via HTTP) ===
-String camIP = "192.168.100.131";
+// === CAMARAS LOCALES (Snapshots via HTTP - ONVIF Discovery + Fallback NVS) ===
+#define MAX_CAMERAS 5
+String camIPs[MAX_CAMERAS];
+int camCount = 0;
 String camUser = "admin";
 String camPass = "admin1234";
 unsigned long lastSnapshotTime = 0;
 const unsigned long SNAPSHOT_INTERVAL_MS = 5000;
 String snapshotAuth;
+
+void descubrirCamarasONVIF() {
+  WiFiUDP udp;
+  if (!udp.beginMulticast(IPAddress(239, 255, 255, 250), 3702)) {
+    Serial.println("⚠️ No se pudo unir al multicast ONVIF.");
+    return;
+  }
+
+  String probe = "<?xml version=\"1.0\" encoding=\"utf-8\"?><e:Envelope xmlns:e=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:w=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\" xmlns:dn=\"http://www.onvif.org/ver10/network/wsdl\"><e:Header><w:MessageID>uuid:" + randomHex(16) + "</w:MessageID><w:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To><w:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</w:Action></e:Header><e:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter</d:Types></d:Probe></e:Body></e:Envelope>";
+
+  Serial.println("🔍 Buscando cámaras ONVIF en la red...");
+
+  // Enviar Probe 3 veces para asegurar que llegue
+  for (int i = 0; i < 3; i++) {
+    udp.beginPacket(IPAddress(239, 255, 255, 250), 3702);
+    udp.print(probe);
+    udp.endPacket();
+    delay(200);
+  }
+
+  unsigned long t0 = millis();
+  while (millis() - t0 < 3000) {
+    int size = udp.parsePacket();
+    if (size > 0) {
+      char buf[size + 1];
+      udp.readBytes(buf, size);
+      buf[size] = 0;
+      String resp(buf);
+
+      // Buscar XAddrs: http://192.168.x.x/onvif/...
+      int pos = resp.indexOf("XAddrs");
+      if (pos > 0) {
+        pos = resp.indexOf("http://", pos);
+        if (pos > 0) {
+          int end = resp.indexOf("/", pos + 7);
+          if (end > 0) {
+            String ipFull = resp.substring(pos + 7, end);
+            // Extraer solo IP (puede venir con puerto: 192.168.1.131:80)
+            int colon = ipFull.indexOf(":");
+            String ip = (colon > 0) ? ipFull.substring(0, colon) : ipFull;
+
+            bool duplicada = false;
+            for (int j = 0; j < camCount; j++) {
+              if (camIPs[j] == ip) { duplicada = true; break; }
+            }
+            if (!duplicada && camCount < MAX_CAMERAS) {
+              camIPs[camCount++] = ip;
+              Serial.print("📷 Cámara #"); Serial.print(camCount);
+              Serial.print(" encontrada: "); Serial.println(ip);
+            }
+          }
+        }
+      }
+    }
+  }
+  udp.stop();
+
+  if (camCount == 0) {
+    Serial.println("⚠️ No se encontraron cámaras via ONVIF Discovery. Cargando fallback...");
+    // Cargar IPs guardadas en NVS como respaldo
+    preferences.begin("camaras", true);
+    camCount = preferences.getInt("count", 0);
+    if (camCount == 0) {
+      // Si nunca se ha guardado nada, usar la IP hardcodeada por defecto
+      camIPs[0] = "192.168.1.100";
+      camCount = 1;
+      Serial.print("📷 Usando IP hardcodeada: "); Serial.println(camIPs[0]);
+    } else {
+      for (int i = 0; i < camCount && i < MAX_CAMERAS; i++) {
+        camIPs[i] = preferences.getString(("ip" + String(i)).c_str(), "");
+      }
+      Serial.print("📷 Cargadas "); Serial.print(camCount);
+      Serial.println(" IPs desde NVS.");
+    }
+    preferences.end();
+  } else {
+    // Guardar IPs descubiertas en NVS para futuros fallbacks
+    preferences.begin("camaras", false);
+    preferences.putInt("count", camCount);
+    for (int i = 0; i < camCount; i++) {
+      preferences.putString(("ip" + String(i)).c_str(), camIPs[i]);
+    }
+    preferences.end();
+    Serial.print("📷 "); Serial.print(camCount);
+    Serial.println(" cámara(s) guardadas en NVS.");
+  }
+}
 
 // === COMMAND LONG POLLING (Respuesta instantánea desde la nube) ===
 bool pollingActive = false;
@@ -134,6 +223,12 @@ void consultarComandosPendientes() {
         delay(150);
       }
       apagarAlarma();
+    } else if (body.indexOf("\"capturar\"") > 0) {
+      Serial.println("📋 Comando: TOMAR FOTO (prueba)");
+      for (int i = 0; i < camCount; i++) {
+        capturarYSubirSnapshot(camIPs[i]);
+        delay(300);
+      }
     }
   }
   http.end();
@@ -143,9 +238,9 @@ void consultarComandosPendientes() {
 // ============================================================
 // FUNCIÓN: Capturar snapshot de cámara local y subirlo al droplet
 // ============================================================
-void capturarYSubirSnapshot() {
+void capturarYSubirSnapshot(String cameraIP) {
   if (WiFi.status() != WL_CONNECTED) return;
-  if (camIP.length() < 7) return;
+  if (cameraIP.length() < 7) return;
   if (millis() - lastSnapshotTime < SNAPSHOT_INTERVAL_MS) return;
   lastSnapshotTime = millis();
 
@@ -153,8 +248,8 @@ void capturarYSubirSnapshot() {
   WiFiClient client;
 
   // Paso 1: GET sin auth
-  if (!client.connect(camIP.c_str(), 80)) { Serial.println("📷 no conecta"); return; }
-  client.print("GET " + uri + " HTTP/1.1\r\nHost: " + camIP + "\r\nConnection: close\r\n\r\n");
+  if (!client.connect(cameraIP.c_str(), 80)) { Serial.println("📷 no conecta"); return; }
+  client.print("GET " + uri + " HTTP/1.1\r\nHost: " + cameraIP + "\r\nConnection: close\r\n\r\n");
   
   String statusLine = client.readStringUntil('\n');
   int code = 0;
@@ -188,11 +283,11 @@ void capturarYSubirSnapshot() {
       String respVal = digestMD5(ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":" + qop + ":" + ha2);
 
       WiFiClient client2;
-      if (client2.connect(camIP.c_str(), 80)) {
+      if (client2.connect(cameraIP.c_str(), 80)) {
         String auth = "Digest username=\"" + camUser + "\", realm=\"" + realm + 
           "\", nonce=\"" + nonce + "\", uri=\"" + uri + "\", qop=" + qop + 
           ", nc=" + nc + ", cnonce=\"" + cnonce + "\", response=\"" + respVal + "\"";
-        client2.print("GET " + uri + " HTTP/1.1\r\nHost: " + camIP + "\r\nAuthorization: " + auth + "\r\nConnection: close\r\n\r\n");
+        client2.print("GET " + uri + " HTTP/1.1\r\nHost: " + cameraIP + "\r\nAuthorization: " + auth + "\r\nConnection: close\r\n\r\n");
         
         statusLine = client2.readStringUntil('\n');
         code = statusLine.indexOf("200") > 0 ? 200 : 0;
@@ -229,7 +324,6 @@ void capturarYSubirSnapshot() {
             free(jpeg);
             return;
           }
-          client2.stop();
           client2.stop();
         }
       }
@@ -382,6 +476,36 @@ void manejarStatus() {
   String estado = isAlarmActive ? "activa" : "inactiva";
   String json = "{\"alarm\":\"" + estado + "\",\"wifi\":\"" + String(WiFi.RSSI()) + " dBm\",\"ip\":\"" + WiFi.localIP().toString() + "\",\"mac\":\"" + WiFi.macAddress() + "\"}";
   server.send(200, "application/json", json);
+}
+
+// ============================================================
+// ENDPOINT WEB: /setcam → Cambiar IP de cámara sin reflashear
+// ============================================================
+void manejarSetCam() {
+  if (server.hasArg("ip") && server.hasArg("idx")) {
+    int idx = server.arg("idx").toInt();
+    String ip = server.arg("ip");
+    if (idx >= 0 && idx < MAX_CAMERAS) {
+      if (idx >= camCount) camCount = idx + 1;
+      camIPs[idx] = ip;
+      preferences.begin("camaras", false);
+      preferences.putInt("count", camCount);
+      for (int i = 0; i < camCount; i++) {
+        preferences.putString(("ip" + String(i)).c_str(), camIPs[i]);
+      }
+      preferences.end();
+      Serial.print("💾 Cámara #"); Serial.print(idx); Serial.print(" IP guardada: "); Serial.println(ip);
+      server.send(200, "text/plain", "OK IP #" + String(idx) + " = " + ip);
+    } else {
+      server.send(400, "text/plain", "idx fuera de rango (0-" + String(MAX_CAMERAS-1) + ")");
+    }
+  } else if (server.hasArg("list")) {
+    String list = camCount > 0 ? camIPs[0] : "0";
+    for (int i = 1; i < camCount; i++) list += "," + camIPs[i];
+    server.send(200, "text/plain", String(camCount) + ":" + list);
+  } else {
+    server.send(200, "text/plain", "USO: /setcam?ip=192.168.1.100&idx=0  |  /setcam?list=1");
+  }
 }
 
 // ============================================================
@@ -608,8 +732,13 @@ void setup() {
   registerUrl = "http://" + backendIP + ":3001/api/esp/register";
 
   // Codificar Basic Auth para snapshot de cámara
-  // Codificar Basic Auth para snapshot de cámara
   snapshotAuth = base64Encode(camUser + ":" + camPass);
+
+  // Descubrir cámaras ONVIF en la red (con fallback a NVS)
+  descubrirCamarasONVIF();
+  for (int i = 0; i < camCount; i++) {
+    Serial.print("📷 Cámara "); Serial.print(i+1); Serial.print(": "); Serial.println(camIPs[i]);
+  }
 
   // ¡Conectado con éxito! -> Luz Azul Fija (per documentación)
   digitalWrite(PIN_LED_AZUL, HIGH);
@@ -633,8 +762,9 @@ void setup() {
   server.on("/identificar", manejarIdentificar);
   server.on("/toggle", manejarToggleWeb);
   server.on("/status", manejarStatus);
+  server.on("/setcam", manejarSetCam);
   server.begin();
-  Serial.println("🌐 Servidor Web del ESP32 Listo (Endpoints: /activar, /silenciar, /identificar, /toggle, /status)");
+  Serial.println("🌐 Servidor Web del ESP32 Listo (Endpoints: /activar, /silenciar, /identificar, /toggle, /status, /setcam)");
 
   // Registrar esta placa en el Backend de Node.js
   registrarEnBackend();
@@ -661,9 +791,12 @@ void loop() {
     consultarComandosPendientes();
   }
 
-  // Solo subir snapshots mientras la alarma está activa
-  if (isAlarmActive) {
-    capturarYSubirSnapshot();
+  // Solo subir snapshots mientras la alarma está activa (todas las cámaras)
+  if (isAlarmActive && camCount > 0) {
+    for (int i = 0; i < camCount; i++) {
+      capturarYSubirSnapshot(camIPs[i]);
+      delay(200);
+    }
   }
 
   // Capa de Auto-Silencio (Seguro Vecinal 3 Minutos)

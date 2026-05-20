@@ -684,7 +684,11 @@ app.get('/api/emergency-view/:sector', verifyUser, verifySubscription, async (re
                 res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
                 return res.end(espSnapshots[espmac].buffer);
             }
-            return res.status(502).json({ error: "Snapshot no disponible. Esperando al ESP32..." });
+            if (espmac) {
+                pendingCommands[espmac] = { action: 'capturar', timestamp: Date.now() };
+                console.log(`📋 Comando capturar encolado para ESP ${espmac} (sector ${sector})`);
+            }
+            return res.status(502).json({ error: "Snapshot no disponible. Solicitando al ESP32..." });
         }
 
         if (cam.connection_type === 'p2p') {
@@ -765,7 +769,11 @@ app.get('/api/emergency-view/:sector/:cameraId', verifyUser, verifySubscription,
                 res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
                 return res.end(espSnapshots[espmac].buffer);
             }
-            return res.status(502).json({ error: "Snapshot no disponible. Esperando al ESP32..." });
+            if (espmac) {
+                pendingCommands[espmac] = { action: 'capturar', timestamp: Date.now() };
+                console.log(`📋 Comando capturar encolado para ESP ${espmac} (cámara ${cameraId})`);
+            }
+            return res.status(502).json({ error: "Snapshot no disponible. Solicitando al ESP32..." });
         }
 
         if (cam.connection_type === 'p2p') {
