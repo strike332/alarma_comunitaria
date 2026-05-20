@@ -333,8 +333,9 @@ function createWhatsAppClient() {
     clearInterval(waWatchdogTimer);
     waQrAttempts = 0;
 
-    // Limpiar lock de perfil Chrome (queda de procesos anteriores en Docker restart)
-    try { execSync('rm -rf /tmp/puppeteer_chromium/Singleton* 2>/dev/null || true'); } catch(e) {}
+    // Limpiar perfil Chrome completo (evita locks de procesos muertos en Docker restart)
+    try { execSync('rm -rf /tmp/puppeteer_chromium'); } catch(e) {}
+    try { execSync('mkdir -p /tmp/puppeteer_chromium'); } catch(e) {}
 
     const chromePath = process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
 
