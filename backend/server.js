@@ -424,7 +424,15 @@ function createWhatsAppClient() {
 
         // Auto-limpiar sesión corrupta y reiniciar con QR nuevo
         console.log('🗑️ Sesión corrupta detectada. Limpiando...');
-        try { await whatsapp.destroy(); } catch(e) {}
+        try {
+            const old = whatsapp;
+            whatsapp = null;
+            await Promise.race([
+                old.destroy(),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 3000))
+            ]);
+        } catch(e) {}
+        try { execSync('pkill -9 -f chromium 2>/dev/null || true'); } catch(e) {}
         try { execSync('rm -rf /app/backend/.wwebjs_auth/* 2>/dev/null || true'); } catch(e) {}
 
         scheduleReconnect();
@@ -477,10 +485,16 @@ function scheduleReconnect() {
         waReconnectTimer = null;
         console.log('🔄 Reconectando WhatsApp con cliente NUEVO...');
 
-        // Destruir el cliente viejo de forma segura
-        try { await whatsapp.destroy(); } catch (e) {}
-        // Limpiar procesos huérfanos de Chromium
-        try { execSync('pkill -f chromium 2>/dev/null || true'); } catch(e) {}
+        // Destruir el cliente viejo con timeout (no debe bloquear si Chrome está muerto)
+        const old = whatsapp;
+        whatsapp = null;
+        try {
+            await Promise.race([
+                old.destroy(),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000))
+            ]);
+        } catch (e) {}
+        try { execSync('pkill -9 -f chromium 2>/dev/null || true'); } catch(e) {}
 
         whatsAppStatus = 'cargando';
         currentQR = null;
@@ -516,8 +530,16 @@ async function restartWhatsApp() {
     clearTimeout(waReconnectTimer);
     waReconnectTimer = null;
     clearInterval(waWatchdogTimer);
-    try { await whatsapp.destroy(); } catch(e) {}
-    try { execSync('pkill -f chromium 2>/dev/null || true'); } catch(e) {}
+    // Timeout wrapper: destroy no debe bloquear si Chrome ya está muerto
+    const old = whatsapp;
+    whatsapp = null;
+    try {
+        await Promise.race([
+            old.destroy(),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000))
+        ]);
+    } catch(e) {}
+    try { execSync('pkill -9 -f chromium 2>/dev/null || true'); } catch(e) {}
     whatsAppStatus = 'cargando';
     currentQR = null;
     io.emit('whatsapp_status', 'cargando');
@@ -1311,9 +1333,16 @@ app.post('/api/admin/whatsapp/reset', verifyAdmin, async (req, res) => {
     clearTimeout(waReconnectTimer);
     waReconnectTimer = null;
     clearInterval(waWatchdogTimer);
-    try { await whatsapp.destroy(); } catch(e) {}
+    const old = whatsapp;
+    whatsapp = null;
     try {
-        const { execSync } = require('child_process');
+        await Promise.race([
+            old.destroy(),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 3000))
+        ]);
+    } catch(e) {}
+    try { execSync('pkill -9 -f chromium 2>/dev/null || true'); } catch(e) {}
+    try {
         execSync('rm -rf /app/backend/.wwebjs_auth/* 2>/dev/null || true');
     } catch(e) {}
     whatsAppStatus = 'esperando_qr';

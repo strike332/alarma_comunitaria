@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
     chromium \
     ffmpeg \
     dumb-init \
+    procps \
     libnss3 \
     libnspr4 \
     libatk1.0-0 \
